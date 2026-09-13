@@ -1,0 +1,41 @@
+# Dedicated Production Backend Dockerfile for Azure Container Apps
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy backend dependencies configuration
+COPY pyproject.toml ./
+COPY backend ./backend
+COPY scripts ./scripts
+
+# Install dependencies into Python environment
+RUN pip install --no-cache-dir -e .
+
+# Set Python path to backend/src so main module and relative imports resolve
+ENV PYTHONPATH=/app/backend/src
+ENV CHROMA_DIR=/app/backend/data/chroma
+ENV DB_PATH=/app/backend/data/sessions.db
+ENV OPENAI_BASE_URL=https://apidev.navigatelabsai.com/
+ENV OPENAI_API_KEY=sk-1mNkjU09WUAejXBxWhaA_w
+ENV OPENAI_CHAT_MODEL=gpt-4.1-nano
+ENV OPENAI_EMBED_MODEL=text-embedding-3-small
+ENV JWT_SECRET=super-secret-key-change-in-prod
+ENV LLM_OFFLINE=false
+
+# Ensure persistence directory exists
+RUN mkdir -p /app/backend/data/chroma /app/backend/data/txt
+
+# Seed corpus during image build
+RUN PYTHONPATH=/app/backend/src python scripts/seed_corpus.py && \
+    PYTHONPATH=/app/backend/src python -c "from pathlib import Path; from ingestion.ingestor import ingest_directory; ingest_directory(Path('backend/data/txt'))"
+
+EXPOSE 8000
+
+# Start backend FastAPI server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  compliance-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: compliance-ai-app
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_BASE_URL=https://apidev.navigatelabsai.com/
+      - OPENAI_API_KEY=sk-1mNkjU09WUAejXBxWhaA_w
+      - OPENAI_CHAT_MODEL=gpt-4.1-nano
+      - OPENAI_EMBED_MODEL=text-embedding-3-small
+      - CHROMA_DIR=./backend/data/chroma
+      - DB_PATH=./backend/data/sessions.db
+      - JWT_SECRET=super-secret-key-change-in-prod
+      - LLM_OFFLINE=false
+    volumes:
+      - chroma_data:/app/backend/data/chroma
+      - session_data:/app/backend/data
+    restart: always
+
+volumes:
+  chroma_data:
+  session_data:

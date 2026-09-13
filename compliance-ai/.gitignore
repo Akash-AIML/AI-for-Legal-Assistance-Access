@@ -1,0 +1,35 @@
+# Dependencies & Virtual Environment
+node_modules/
+.venv/
+venv/
+env/
+
+# Python Cache & Testing
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env*.local
+
+# Database & Persistent Data
+*.db
+*.sqlite3
+data/chroma/
+data/uploads/
+data/sessions.db
+backend/data/chroma/
+backend/data/uploads/
+backend/data/sessions.db
+
+# Build & Dist Outputs
+dist/
+build/
+.vercel/
+
+# Logs
+*.log
+.DS_Store
