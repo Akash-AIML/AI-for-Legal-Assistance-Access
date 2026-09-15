@@ -1,0 +1,53 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 988 >>
+stream
+BT /F1 14 Tf 50 750 Td (MASTER SAAS ENTERPRISE SERVICE AGREEMENT) ' /F1 10 Tf 14 TL
+() 
+(1. SERVICES AND ACCESSIBILITY) '
+(Provider grants Customer a non-exclusive, non-transferable right to access ) '
+(and use the SaaS Platform during the Subscription Term.) '
+() 
+(2. SERVICE LEVEL AGREEMENT (SLA)) '
+(Provider guarantees a 99.9% monthly Service Uptime, excluding scheduled mai) '
+(ntenance. Service credits of 10% monthly fee apply for downtime.) '
+() 
+(3. LIMITATION OF LIABILITY) '
+(IN NO EVENT SHALL EITHER PARTYS AGGREGATE LIABILITY EXCEED THE TOTAL FEES P) '
+(AID BY CUSTOMER IN THE TWELVE \(12\) MONTHS PRECEDING THE CLAIM.) '
+() 
+(4. INTELLECTUAL PROPERTY) '
+(Customer retains all right, title, and interest in Customer Data. Provider ) '
+(retains all rights to the SaaS Platform and underlying software.) '
+() 
+(5. GOVERNING LAW AND JURISDICTION) '
+(This Agreement shall be governed by the laws of the State of Delaware, with) '
+(out regard to conflict of law principles.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000242 00000 n 
+0000000300 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+400
+%%EOF
