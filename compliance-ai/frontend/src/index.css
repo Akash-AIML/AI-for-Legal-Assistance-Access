@@ -1,0 +1,138 @@
+/* ==========================================================================
+   Fonts
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design Tokens
+   ========================================================================== */
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 220 20% 97%;
+    --card: 0 0% 100%;
+    --popover: 0 0% 100%;
+
+    /* Text */
+    --foreground: 224 71% 4%;
+    --card-foreground: 224 71% 4%;
+    --popover-foreground: 224 71% 4%;
+
+    /* Brand */
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Neutrals */
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 50% 10%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 8% 46%;
+    --accent: 220 14% 94%;
+    --accent-foreground: 220 50% 10%;
+
+    /* Feedback */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Lines */
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 217 91% 60%;
+
+    /* Shape */
+    --radius: 0.75rem;
+  }
+
+  /* ------------------------------------------------------------------------
+     Pure Pitch-Black Theme
+     bg #080808 · card #141414 · border #2e2e2e · primary #fafafa
+     ------------------------------------------------------------------------ */
+  .dark {
+    /* Surfaces */
+    --background: 0 0% 3%;       /* #080808 */
+    --card: 0 0% 8%;             /* #141414 */
+    --popover: 0 0% 8%;
+
+    /* Text */
+    --foreground: 0 0% 98%;      /* #fafafa */
+    --card-foreground: 0 0% 98%;
+    --popover-foreground: 0 0% 98%;
+
+    /* Brand — inverted to white on black */
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 5%;
+
+    /* Neutrals */
+    --secondary: 0 0% 15%;       /* #262626 */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14%;           /* #242424 */
+    --muted-foreground: 0 0% 70%;/* #b3b3b3 */
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+
+    /* Feedback */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Lines */
+    --border: 0 0% 18%;          /* #2e2e2e */
+    --input: 0 0% 18%;
+    --ring: 0 0% 90%;
+  }
+}
+
+/* ==========================================================================
+   Base Elements
+   ========================================================================== */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased min-h-screen overflow-x-hidden;
+    @apply selection:bg-primary/20 selection:text-primary;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .glass-panel {
+    @apply bg-card/95 backdrop-blur-xl border border-border/80 shadow-sm;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent font-heading;
+  }
+
+  .gradient-text-amber {
+    @apply bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-300 bg-clip-text text-transparent font-heading;
+  }
+
+  .font-heading {
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .font-mono-custom {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
