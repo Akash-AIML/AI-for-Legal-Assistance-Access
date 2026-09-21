@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useScroll, useTransform } from "framer-motion"
+import { motion } from "framer-motion"
 import { Shield, Menu, X, Sun, Moon } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
