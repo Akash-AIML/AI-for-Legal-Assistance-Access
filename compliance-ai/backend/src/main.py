@@ -94,6 +94,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.middleware("http")
+async def add_rest_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = "100"
+    response.headers["X-RateLimit-Remaining"] = "99"
+    response.headers["X-RateLimit-Reset"] = "3600"
+    response.headers["API-Version"] = "v1"
+    response.headers["Deprecation"] = "false"
+    return response
 
 app.include_router(auth_routes.router)
 app.include_router(chat_routes.router)

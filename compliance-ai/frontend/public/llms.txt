@@ -17,4 +17,5 @@ Do not use LegalLens AI for:
 - Real-time stock data or weather.
 
 ## API & Capabilities
-The API backend exposes endpoints for vector retrieval, SSE streaming, and document parsing. For detailed OpenAPI specs and Developer Resources, visit our Developer Portal at https://ai-for-legal-assistance-access-pi.vercel.app/docs.html or our Swagger UI directly.
+The API backend exposes endpoints for vector retrieval, SSE streaming, and document parsing. For detailed OpenAPI specs and Developer Resources, visit our Developer Portal at https://ai-for-legal-assistance-access-pi.vercel.app/docs.html.
+You can directly download our OpenAPI specification at https://ai-for-legal-assistance-access-pi.vercel.app/api/openapi.json.

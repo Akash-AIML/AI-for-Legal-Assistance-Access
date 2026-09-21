@@ -1,38 +1,28 @@
 {
-  "version": 2,
-  "builds": [
+  "framework": "vite",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
     {
-      "src": "backend/api/index.py",
-      "use": "@vercel/python"
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/(about|contact|privacy|docs)",
-      "dest": "/frontend/$1.html"
-    },
-    {
-      "src": "/(.*)",
+      "source": "/",
       "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
-      "dest": "backend/api/index.py"
+      "destination": "/api/index.py"
     },
     {
-      "handle": "filesystem"
+      "source": "/(.*)",
+      "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
+      "destination": "/api/index.py"
     },
     {
-      "src": "/(.*)",
-      "dest": "/frontend/$1"
+      "source": "/(about|contact|privacy|docs)",
+      "destination": "/$1.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
