@@ -13,7 +13,10 @@ from models import DocMetadata, DocStatus
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
-UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "uploads"
+import tempfile
+import os
+
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(tempfile.gettempdir()) / "legal_lens_uploads"))
 
 
 class StatusUpdate(BaseModel):
