@@ -2,22 +2,27 @@
 
 import { motion, useScroll, useTransform } from "framer-motion"
 import { Shield, Menu, X, Sun, Moon } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/hooks"
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
   const { theme, toggle } = useTheme()
-  const { scrollY } = useScroll()
-  const navOpacity = useTransform(scrollY, [0, 100], [0, 1])
-  const navBg = useTransform(scrollY, [0, 100], ["transparent", "rgba(250, 250, 250, 0.95)"])
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 20)
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
 
   return (
     <motion.header
-      style={{ opacity: navOpacity, background: navBg }}
-      className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b border-border transition-all duration-300"
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isScrolled ? "bg-background/80 backdrop-blur-md border-b border-border" : "bg-transparent border-transparent"
+      }`}
     >
       <nav className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between" aria-label="Main navigation">
         <Link to="/" className="flex items-center gap-2" aria-label="LegalLens Home">
