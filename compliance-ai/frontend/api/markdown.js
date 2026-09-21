@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   res.setHeader('Vary', 'Accept');
   res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
   
