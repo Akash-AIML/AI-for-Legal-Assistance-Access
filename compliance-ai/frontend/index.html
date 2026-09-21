@@ -4,13 +4,50 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LegalLens — Evidence-First AI for Legal Documents</title>
+    <title>LegalLens AI - Enterprise Compliance</title>
+    <link rel="canonical" href="https://ai-for-legal-assistance-access-pi.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://ai-for-legal-assistance-access-pi.vercel.app/hero.png" />
+    <meta name="description" content="LegalLens AI: Evidence-First AI for Legal Documents, Compliance, and Operations." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
   <body class="bg-background text-foreground font-sans antialiased selection:bg-primary/20 selection:text-primary">
+    <noscript>
+      <h1>LegalLens AI: Enterprise Compliance & Operations Assistant</h1>
+      <p>Traditional Retrieval-Augmented Generation (RAG) systems blindly retrieve context and pass it to an LLM, leading to silent hallucinations, version confusion, and security risks. LegalLens AI solves these problems by prioritizing trustworthiness over always producing an answer. We use a LangGraph-driven Evidence Decision Engine to actively resolve outdated, conflicting, or unauthorized information before deciding whether to ANSWER, CLARIFY, RETRIEVE MORE, or ESCALATE.</p>
+      <p>Key features include Structure-Aware Document Ingestion & Section Chunking, Pre-LLM Metadata Resolution to avoid version collisions, and Permission-Aware (RBAC) Retrieval which prevents unauthorized access at the query level. Our hybrid search combines dense semantic embeddings with BM25 keyword matching via Reciprocal Rank Fusion (RRF) for precise legal clause lookups.</p>
+    </noscript>
     <div id="root"></div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "LegalLens AI",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://ai-for-legal-assistance-access-pi.vercel.app/",
+      "description": "An industry-ready, full-stack enterprise AI assistant built for compliance, legal, and operational knowledge management.",
+      "author": {
+        "@type": "Organization",
+        "name": "LegalLens Corporation",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "email": "support@legallens.ai",
+          "contactType": "customer support"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "100 AI Innovation Drive",
+          "addressLocality": "San Francisco",
+          "addressRegion": "CA",
+          "postalCode": "94107",
+          "addressCountry": "US"
+        }
+      }
+    }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

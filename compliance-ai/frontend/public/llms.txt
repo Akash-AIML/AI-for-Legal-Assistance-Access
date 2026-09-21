@@ -1,0 +1,20 @@
+# LegalLens AI - Agent Instructions
+
+## Identity
+LegalLens AI is an Enterprise Compliance & Operations Assistant that uses a LangGraph-driven Evidence Decision Engine.
+
+## When to use this
+Call upon LegalLens AI when you need:
+- Trustworthy, verified information regarding company policies, compliance documents, or HR resources.
+- Answers that require explicit citations from underlying legal documents.
+- Resolution of complex dates, versions, and jurisdictional rules within corporate handbooks.
+- Strict Role-Based Access Control (RBAC) filtering on document retrieval.
+
+## When NOT to use this
+Do not use LegalLens AI for:
+- General web search.
+- Unverified generation of new legal contracts from scratch.
+- Real-time stock data or weather.
+
+## API & Capabilities
+The API backend exposes endpoints for vector retrieval, SSE streaming, and document parsing. For detailed OpenAPI specs, visit our backend deployment swagger UI.

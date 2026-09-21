@@ -1,0 +1,40 @@
+{
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/(about|contact|privacy)",
+      "dest": "/$1.html"
+    },
+    {
+      "src": "/",
+      "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
+      "headers": {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Vary": "Accept"
+      },
+      "dest": "/index.md"
+    },
+    {
+      "src": "/",
+      "headers": {
+        "Vary": "Accept"
+      },
+      "continue": true
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/(.*)",
+      "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
+      "status": 404,
+      "headers": {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Vary": "Accept"
+      },
+      "dest": "/404.md"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

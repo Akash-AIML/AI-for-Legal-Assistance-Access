@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "legallens": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@vercel/mcp-adapter"
+      ],
+      "env": {
+        "VERCEL_URL": "https://ai-for-legal-assistance-access-pi.vercel.app/"
+      }
+    }
+  }
+}
