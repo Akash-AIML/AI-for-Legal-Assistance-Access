@@ -4,9 +4,12 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from pydantic import BaseModel
 
 from api import auth_routes, chat_routes, document_routes, escalation_routes, legal_routes, speech_routes, tts_routes
 from auth import get_current_user
@@ -65,10 +68,24 @@ Evidence-first AI for understanding legal documents. LegalLens analyzes contract
 Uploaded documents are treated as untrusted data. Document content is isolated from system instructions to prevent prompt injection.
     """,
     openapi_tags=tags_metadata,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        accept = request.headers.get("accept", "")
+        if "text/markdown" in accept.lower():
+            path = request.url.path
+            if path == "/" or path == "/index.md":
+                content = "# LegalLens AI\n\nLegalLens AI is an Enterprise Compliance & Operations Assistant that uses a LangGraph-driven Evidence Decision Engine to actively resolve outdated, conflicting, or unauthorized information.\n\n## Key Features\n- **Structure-Aware Chunking:** Parses logical document boundaries.\n- **RBAC Meta-filtering:** Database-level role-based access control.\n- **Pre-LLM Precedence:** Resolves version and date conflicts before they hit the LLM.\n- **Hybrid RRF Search:** Combines dense semantic and sparse BM25 search.\n- **LangGraph State Machine:** Bounds LLM responses to prevent hallucination.\n\nFor documentation, see our [llms.txt](/llms.txt)."
+                return Response(content=content, status_code=200, media_type="text/markdown", headers={"Vary": "Accept"})
+            else:
+                content = "# 404 Not Found\n\nThe requested resource could not be found.\n\nIf you are an AI agent looking for documentation or capabilities, please refer to:\n- [llms.txt](/llms.txt) for agentic usage instructions.\n- [Sitemap](/sitemap.xml) for a full list of indexable pages.\n- [MCP](/.well-known/mcp) for our Model Context Protocol definitions."
+                return Response(content=content, status_code=404, media_type="text/markdown", headers={"Vary": "Accept"})
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,7 +112,13 @@ def startup():
     threading.Thread(target=store.rebuild_index, daemon=True).start()
 
 
-@app.get("/api/health", tags=["System & Audit"])
+class HealthResponse(BaseModel):
+    status: str
+    chunks: int
+    documents: int
+    offline_mode: bool
+
+@app.get("/api/health", tags=["System & Audit"], operation_id="get_health_status", response_model=HealthResponse, description="Returns the current system health status, including vector index chunk counts and offline mode configuration.")
 def health():
     return {
         "status": "ok",
@@ -105,7 +128,7 @@ def health():
     }
 
 
-@app.get("/api/audit/recent", tags=["System & Audit"])
+@app.get("/api/audit/recent", tags=["System & Audit"], operation_id="get_recent_audit_logs", description="Retrieves the 50 most recent audit logs for LangGraph evidence decisions. Requires Admin, Compliance, or HR role.")
 def audit_recent(user: dict = Depends(get_current_user)):
     if user["role"] not in ("Admin", "Compliance", "HR"):
         from fastapi import HTTPException

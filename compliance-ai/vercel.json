@@ -6,10 +6,6 @@
       "use": "@vercel/python"
     },
     {
-      "src": "frontend/api/markdown.js",
-      "use": "@vercel/node"
-    },
-    {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -19,7 +15,7 @@
   ],
   "routes": [
     {
-      "src": "/api/(?!markdown)(.*)",
+      "src": "/api/(.*)",
       "dest": "backend/api/index.py"
     },
     {
@@ -29,7 +25,7 @@
     {
       "src": "/(.*)",
       "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
-      "dest": "/frontend/api/markdown.js"
+      "dest": "backend/api/index.py"
     },
     {
       "handle": "filesystem"
