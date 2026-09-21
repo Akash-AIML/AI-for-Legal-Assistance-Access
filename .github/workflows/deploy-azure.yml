@@ -86,11 +86,11 @@ jobs:
               --target-port 8000 \
               --image ghcr.io/${{ env.REPO_LOWER }}/backend:latest \
               --env-vars \
-                OPENAI_BASE_URL="${{ env.OPENAI_BASE_URL || 'https://apidev.navigatelabsai.com/' }}" \
-                OPENAI_API_KEY="${{ env.OPENAI_API_KEY || 'sk-1mNkjU09WUAejXBxWhaA_w' }}" \
-                OPENAI_CHAT_MODEL="gpt-4.1-nano" \
-                OPENAI_EMBED_MODEL="text-embedding-3-small" \
-                JWT_SECRET="${{ env.JWT_SECRET || 'super-secret-key-change-in-prod' }}" \
+                OPENAI_BASE_URL="${{ env.OPENAI_BASE_URL || 'https://integrate.api.nvidia.com/v1' }}" \
+                OPENAI_API_KEY="${{ env.OPENAI_API_KEY || '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' }}" \
+                OPENAI_CHAT_MODEL="${{ env.OPENAI_CHAT_MODEL || 'openai/gpt-oss-20b' }}" \
+                OPENAI_EMBED_MODEL="${{ env.OPENAI_EMBED_MODEL || 'nvidia/llama-nemotron-embed-vl-1b-v2' }}" \
+                JWT_SECRET="${{ env.JWT_SECRET || 'change-me-in-prod' }}" \
                 LLM_OFFLINE="false"
           else
             az containerapp up \
@@ -101,11 +101,11 @@ jobs:
               --target-port 8000 \
               --image ghcr.io/${{ env.REPO_LOWER }}/backend:latest \
               --env-vars \
-                OPENAI_BASE_URL="${{ env.OPENAI_BASE_URL || 'https://apidev.navigatelabsai.com/' }}" \
-                OPENAI_API_KEY="${{ env.OPENAI_API_KEY || 'sk-1mNkjU09WUAejXBxWhaA_w' }}" \
-                OPENAI_CHAT_MODEL="gpt-4.1-nano" \
-                OPENAI_EMBED_MODEL="text-embedding-3-small" \
-                JWT_SECRET="${{ env.JWT_SECRET || 'super-secret-key-change-in-prod' }}" \
+                OPENAI_BASE_URL="${{ env.OPENAI_BASE_URL || 'https://integrate.api.nvidia.com/v1' }}" \
+                OPENAI_API_KEY="${{ env.OPENAI_API_KEY || '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' }}" \
+                OPENAI_CHAT_MODEL="${{ env.OPENAI_CHAT_MODEL || 'openai/gpt-oss-20b' }}" \
+                OPENAI_EMBED_MODEL="${{ env.OPENAI_EMBED_MODEL || 'nvidia/llama-nemotron-embed-vl-1b-v2' }}" \
+                JWT_SECRET="${{ env.JWT_SECRET || 'change-me-in-prod' }}" \
                 LLM_OFFLINE="false"
           fi
 

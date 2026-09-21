@@ -4,14 +4,16 @@ An industry-ready, full-stack enterprise AI assistant built for compliance, lega
 
 ---
 
-## 🌐 Live Demos & Production Deployments
+## 🌐 Cloud Deployment Architecture
 
-| Component | URL / Endpoint | Description |
-| :--- | :--- | :--- |
-| **🚀 Production Web App (Custom Domain)** | [https://epcomp.akashg.me/](https://epcomp.akashg.me/) | Live React SPA with Glassmorphism UI & Dual-tier TTS |
-| **⚡ Vercel Frontend Deployment** | [https://navigate-labs-hackathon.vercel.app/](https://navigate-labs-hackathon.vercel.app/) | Vercel Edge SPA deployment |
-| **⚙️ Azure Container App Backend API Docs** | [https://compliance-ai-backend.agreeableocean-d133ab66.eastasia.azurecontainerapps.io/docs](https://compliance-ai-backend.agreeableocean-d133ab66.eastasia.azurecontainerapps.io/docs) | Live FastAPI Swagger UI REST API Documentation |
-| **🩺 Backend Health Endpoint** | [https://compliance-ai-backend.agreeableocean-d133ab66.eastasia.azurecontainerapps.io/api/health](https://compliance-ai-backend.agreeableocean-d133ab66.eastasia.azurecontainerapps.io/api/health) | System health status (16 docs, 283 chunks online) |
+The system is designed to be cloud-native. The recommended deployment strategy for production environments is:
+
+* **Backend & Vector DB**: **Azure Container Apps**
+  * The FastAPI backend and ChromaDB/SQLite storage can be containerized using `Dockerfile.backend` and deployed to Azure Container Apps. A GitHub Actions workflow (`deploy-azure.yml`) is provided for automated CI/CD.
+* **Frontend SPA**: **Vercel**
+  * The React 18 + Vite static application can be deployed directly to Vercel for edge caching and fast global delivery.
+
+*(Note: Live deployment URLs and demo links will be attached here upon completion of the environment setup.)*
 
 ---
 
@@ -31,7 +33,7 @@ Traditional Retrieval-Augmented Generation (RAG) systems blindly retrieve contex
    - **`RETRIEVE MORE`**: Query expansion and bounded re-retrieval.
    - **`ESCALATE`**: Generates audit trails and escalates unresolved conflicts or high-risk queries to human reviewers.
 8. **Interactive Full-Stack Web Interface**:
-   - Modern dark-mode UI (React 18 + Tailwind CSS) with decision status badges, clickable citation drawers, and native speech interaction (STT/TTS).
+   - Modern dark-mode UI (React 18 + Tailwind CSS) with decision status badges,con clickable citation drawers, and native speech interaction (STT/TTS).
    - Knowledge Management & Escalation Dashboard for uploading, marking documents `ACTIVE`/`SUPERSEDED`, and inspecting human escalation tickets.
 
 ---
