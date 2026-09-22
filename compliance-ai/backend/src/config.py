@@ -25,12 +25,13 @@ def _default_chroma_dir() -> str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # OpenAI-compatible provider
-    openai_base_url: str = "https://api.openai.com/v1"
+    # OpenAI-compatible provider (Groq API gateway for ultra-fast LPU inference)
+    openai_base_url: str = "https://api.groq.com/openai/v1"
     openai_api_key: str = ""
-    openai_chat_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    openai_chat_model: str = "openai/gpt-oss-120b"
     openai_embed_model: str = "text-embedding-3-small"
-    openai_audio_model: str = "whisper-1"
+    openai_audio_model: str = "whisper-large-v3-turbo"
 
     # Force offline demo (deterministic embeddings + stub chat). When false,
     # the real OpenAI-compatible provider (base_url + key) is used.

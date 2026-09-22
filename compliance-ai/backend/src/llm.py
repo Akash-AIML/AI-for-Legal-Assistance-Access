@@ -26,7 +26,14 @@ OFFLINE_MODE = _settings.llm_offline
 
 
 def _client() -> OpenAI:
-    return OpenAI(api_key=_settings.openai_api_key or "sk-local", base_url=_settings.openai_base_url)
+    api_key = (
+        _settings.groq_api_key
+        or _settings.openai_api_key
+        or os.environ.get("GROQ_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or "sk-local"
+    )
+    return OpenAI(api_key=api_key, base_url=_settings.openai_base_url)
 
 
 def chat(
@@ -101,7 +108,8 @@ def stream_chat(
 
 def embed_texts(texts: Sequence[str], input_type: str = "query") -> list[list[float]]:
     """Batch-embed texts using the configured embedding model."""
-    if OFFLINE_MODE:
+    if OFFLINE_MODE or "groq.com" in _settings.openai_base_url.lower():
+        # Groq is an ultra-fast LLM inference gateway without an embedding API; use deterministic embeddings
         return [_offline_embed(t) for t in texts]
 
     t0 = time.time()
@@ -111,16 +119,19 @@ def embed_texts(texts: Sequence[str], input_type: str = "query") -> list[list[fl
     if "nvidia" in _settings.openai_base_url.lower() or "nvidia" in _settings.openai_embed_model.lower():
         extra["extra_body"] = {"input_type": input_type}
 
-    resp = _client().embeddings.create(
-        model=_settings.openai_embed_model,
-        input=list(texts),
-        **extra
-    )
-    # sort by index to keep order stable
-    ordered = sorted(resp.data, key=lambda d: d.index)
-    dt = (time.time() - t0) * 1000.0
-    logger.debug("Embedding finished in %.1fms | dim=%d", dt, len(ordered[0].embedding) if ordered else 0)
-    return [d.embedding for d in ordered]
+    try:
+        resp = _client().embeddings.create(
+            model=_settings.openai_embed_model,
+            input=list(texts),
+            **extra
+        )
+        ordered = sorted(resp.data, key=lambda d: d.index)
+        dt = (time.time() - t0) * 1000.0
+        logger.debug("Embedding finished in %.1fms | dim=%d", dt, len(ordered[0].embedding) if ordered else 0)
+        return [d.embedding for d in ordered]
+    except Exception as exc:
+        logger.warning("Embedding API call failed (%s). Falling back to resilient offline embeddings.", exc)
+        return [_offline_embed(t) for t in texts]
 
 
 def embed_query(text: str) -> list[float]:
@@ -134,8 +145,14 @@ def transcribe_audio(audio_bytes: bytes, filename: str = "audio.webm", mime: str
     Unlike chat/embeddings there is no deterministic offline fallback, so this
     requires a real provider + API key (the .env OPENAI_BASE_URL / OPENAI_API_KEY).
     """
-    if not _settings.openai_api_key:
-        raise RuntimeError("Speech-to-text needs OPENAI_API_KEY. Add it to backend/.env.")
+    key = (
+        _settings.groq_api_key
+        or _settings.openai_api_key
+        or os.environ.get("GROQ_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+    )
+    if not key:
+        raise RuntimeError("Speech-to-text needs an API key. Add it to backend/.env.")
     resp = _client().audio.transcriptions.create(
         model=_settings.openai_audio_model,
         file=(filename or "audio.webm", audio_bytes, mime),
