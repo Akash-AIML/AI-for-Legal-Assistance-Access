@@ -1,12 +1,8 @@
 {
-  "framework": "vite",
+  "buildCommand": "cd compliance-ai/frontend && npm install && npm run build",
   "outputDirectory": "compliance-ai/frontend/dist",
   "functions": {
-    "api/**/*.py": {
-      "includeFiles": "compliance-ai/backend/**",
-      "maxDuration": 60
-    },
-    "compliance-ai/api/**/*.py": {
+    "api/index.py": {
       "includeFiles": "compliance-ai/backend/**",
       "maxDuration": 60
     }
