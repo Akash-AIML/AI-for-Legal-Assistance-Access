@@ -50,8 +50,9 @@ export function ContractCompare({ documents }: ContractCompareProps) {
     try {
       const res = await api.legal.compare(docA, docB)
       setResult(res)
-    } catch (err: any) {
-      setError(err.message || "Comparison failed")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg || "Comparison failed")
     } finally {
       setLoading(false)
     }
@@ -83,9 +84,9 @@ export function ContractCompare({ documents }: ContractCompareProps) {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Document A</label>
+                <label className="text-sm font-medium text-muted-foreground" htmlFor="select-doc-a">Document A</label>
                 <Select value={docA} onValueChange={setDocA}>
-                  <SelectTrigger className="mt-1 w-full">
+                  <SelectTrigger id="select-doc-a" className="mt-1 w-full" aria-label="Select first document to compare">
                     <SelectValue placeholder="Select first document..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -107,9 +108,9 @@ export function ContractCompare({ documents }: ContractCompareProps) {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Document B</label>
+                <label className="text-sm font-medium text-muted-foreground" htmlFor="select-doc-b">Document B</label>
                 <Select value={docB} onValueChange={setDocB}>
-                  <SelectTrigger className="mt-1 w-full">
+                  <SelectTrigger id="select-doc-b" className="mt-1 w-full" aria-label="Select second document to compare">
                     <SelectValue placeholder="Select second document..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -132,10 +133,10 @@ export function ContractCompare({ documents }: ContractCompareProps) {
               </div>
             </div>
             <div className="mt-4">
-              <Button onClick={compare} disabled={!docA || !docB || loading} className="gap-2">
+              <Button onClick={compare} disabled={!docA || !docB || loading} aria-label="Compare selected documents" className="gap-2">
                 {loading ? (
                   <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -143,7 +144,7 @@ export function ContractCompare({ documents }: ContractCompareProps) {
                   </>
                 ) : (
                   <>
-                    <GitCompare className="h-4 w-4" /> Compare Documents
+                    <GitCompare className="h-4 w-4" aria-hidden="true" /> Compare Documents
                   </>
                 )}
               </Button>

@@ -88,8 +88,8 @@ class DocMetadata(BaseModel):
 
     document_id: str = ""
     title: str = ""
-    document_type: str = "POLICY"  # POLICY | SOP | HR | LEGAL | MANUAL | CONTRACT | NDA | AGREEMENT
-    department: str = "General"
+    document_type: str = "CONTRACT"  # CONTRACT | AGREEMENT | LEASE | NDA | EMPLOYMENT | LEGAL
+    department: str = "Legal"
     jurisdiction: str = "Global"
     version: str = "1"
     effective_date: Optional[date] = None
@@ -104,7 +104,7 @@ class DocMetadata(BaseModel):
     citation: str = ""  # e.g. "Section 14, Indian Contract Act"
     source_path: str = ""
     owner: str = "global"
-    access_roles: list[str] = Field(default_factory=lambda: ["Employee"])
+    access_roles: list[str] = Field(default_factory=lambda: ["Citizen", "Freelancer", "Small Business", "Legal Aid Advisor", "Admin"])
     tags: list[str] = Field(default_factory=list)
 
 

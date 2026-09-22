@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -18,8 +19,6 @@ def _db() -> sqlite3.Connection:
     global _conn
     with _lock:
         if _conn is None:
-            import os
-
             os.makedirs(os.path.dirname(_settings.db_path) or ".", exist_ok=True)
             _conn = sqlite3.connect(_settings.db_path, check_same_thread=False)
             _init(_conn)
@@ -27,6 +26,9 @@ def _db() -> sqlite3.Connection:
 
 
 def _init(conn: sqlite3.Connection) -> None:
+    # WAL mode allows concurrent readers while writing, boosting query efficiency
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -43,6 +45,8 @@ def _init(conn: sqlite3.Connection) -> None:
             meta TEXT,
             created_at TEXT
         );
+        CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+
         CREATE TABLE IF NOT EXISTS escalations (
             escalation_id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -55,6 +59,9 @@ def _init(conn: sqlite3.Connection) -> None:
             status TEXT,
             resolution TEXT
         );
+        CREATE INDEX IF NOT EXISTS idx_escalations_user ON escalations(user_id);
+        CREATE INDEX IF NOT EXISTS idx_escalations_status ON escalations(status);
+
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT,
@@ -65,9 +72,31 @@ def _init(conn: sqlite3.Connection) -> None:
             citations TEXT,
             created_at TEXT
         );
+        CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS xray_cache (
+            cache_key TEXT PRIMARY KEY,
+            document_id TEXT,
+            language TEXT,
+            data TEXT,
+            created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_xray_doc ON xray_cache(document_id);
+
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            role TEXT,
+            department TEXT,
+            jurisdiction TEXT,
+            password_hash TEXT,
+            salt TEXT,
+            created_at TEXT
+        );
         """
     )
     conn.commit()
+
 
 
 def _now() -> str:
@@ -213,3 +242,85 @@ def recent_audit(limit: int = 50) -> list[dict]:
         {"session_id": r[0], "user_id": r[1], "question": r[2], "status": r[3], "decision": r[4], "created_at": r[5]}
         for r in cur.fetchall()
     ]
+
+
+# --- xray_cache ------------------------------------------------------------
+
+def get_xray_cache(document_id: str, language: str = "en") -> dict | None:
+    cache_key = f"{document_id}:{language}"
+    with _lock:
+        cur = _db().execute("SELECT data FROM xray_cache WHERE cache_key = ?", (cache_key,))
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except Exception:
+                return None
+    return None
+
+
+def set_xray_cache(document_id: str, data: dict, language: str = "en") -> None:
+    cache_key = f"{document_id}:{language}"
+    now = _now()
+    with _lock:
+        _db().execute(
+            """
+            INSERT INTO xray_cache (cache_key, document_id, language, data, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data, created_at=excluded.created_at
+            """,
+            (cache_key, document_id, language, json.dumps(data), now),
+        )
+        _db().commit()
+
+
+# --- users -----------------------------------------------------------------
+
+def get_user_by_id(user_id: str) -> dict | None:
+    with _lock:
+        cur = _db().execute(
+            "SELECT id, name, role, department, jurisdiction, password_hash, salt, created_at FROM users WHERE id = ?",
+            (user_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "name": row[1],
+            "role": row[2],
+            "department": row[3],
+            "jurisdiction": row[4],
+            "password_hash": row[5],
+            "salt": row[6],
+            "created_at": row[7],
+        }
+
+
+def get_all_users() -> list[dict]:
+    with _lock:
+        cur = _db().execute("SELECT id, name, role, department, jurisdiction, created_at FROM users")
+        return [
+            {"id": r[0], "name": r[1], "role": r[2], "department": r[3], "jurisdiction": r[4], "created_at": r[5]}
+            for r in cur.fetchall()
+        ]
+
+
+def upsert_user(user_id: str, name: str, role: str, department: str, jurisdiction: str, password_hash: str, salt: str) -> None:
+    now = _now()
+    with _lock:
+        _db().execute(
+            """
+            INSERT INTO users (id, name, role, department, jurisdiction, password_hash, salt, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                role=excluded.role,
+                department=excluded.department,
+                jurisdiction=excluded.jurisdiction,
+                password_hash=excluded.password_hash,
+                salt=excluded.salt
+            """,
+            (user_id, name, role, department, jurisdiction, password_hash, salt, now),
+        )
+        _db().commit()

@@ -6,70 +6,52 @@ Traditional RAG systems blindly retrieve text and pass it to an LLM, leading to 
 
 ---
 
-## 🏗️ System Architecture & Implementation Details
-
-The system is separated into a **FastAPI backend** (handling retrieval, graph execution, and embeddings) and a **React 18 + Vite frontend** (handling the chat UI, streaming, and document management).
-
-### 1. Document Ingestion & Chunking
-**Implementation:**
-Documents (PDF, DOCX, Markdown) are ingested and split using a **Structure-Aware Section Chunker**. Instead of blindly splitting text every 500 tokens, the parser identifies logical document boundaries (e.g., "Scope", "Eligibility", "Exceptions").
-**Reasoning:**
-Legal and compliance documents rely heavily on context. Splitting a clause in half ruins semantic meaning. By chunking at the section level, the vector embedding accurately represents the entire logical thought, drastically improving retrieval precision.
-
-### 2. Rich Metadata & Access Control (RBAC)
-**Implementation:**
-Every chunk stored in ChromaDB contains 12 fields of metadata: `document_id`, `jurisdiction`, `version`, `effective_date`, `status` (`ACTIVE`/`SUPERSEDED`), and `access_roles` (e.g., `HR`, `Employee`, `Manager`).
-During retrieval, a pre-filter is injected into the vector query: `{"access_roles": {"$in": [UserRole, "All"]}}`.
-**Reasoning:**
-Applying Role-Based Access Control *before* the vector search executes ensures zero data leakage. If an LLM is used to filter out restricted data *after* retrieval, prompt injection attacks can bypass it. Database-level filtering guarantees security.
-
-### 3. Pre-LLM Metadata Precedence Resolution
-**Implementation:**
-When multiple versions of a policy are retrieved (e.g., Leave Policy v2 and v4), they are sorted deterministically in Python using strict rules: `Status > Authority > Jurisdiction > Effective Date > Version`.
-**Reasoning:**
-LLMs are notoriously bad at temporal logic and numeric version comparisons. By resolving these conflicts deterministically *before* passing the context to the LLM, we completely eliminate "version hallucinations" (where the LLM accidentally cites an old policy).
-
-### 4. Hybrid Search with RRF (Reciprocal Rank Fusion)
-**Implementation:**
-The retrieval engine runs two simultaneous searches:
-- **Dense Vector Search (ChromaDB + NVIDIA Llama Nemotron)**: Captures semantic meaning.
-- **Sparse Keyword Search (BM25)**: Captures exact keyword matches.
-The results are fused using the RRF algorithm.
-**Reasoning:**
-Vector search is great for abstract queries ("what is the leave limit?"), but terrible at finding exact clause IDs (e.g., "ISO 27001 Section 4"). Hybrid search guarantees high recall for both abstract concepts and exact legal identifiers.
-
-### 5. LangGraph Decision State Machine
-**Implementation:**
-Rather than a simple LangChain pipeline, the core reasoning engine is built on **LangGraph**. It evaluates retrieved evidence across 6 dimensions (Relevance, Completeness, Freshness, Authority, Conflict, Scope). Based on the score, the state machine routes to:
-- **`ANSWER`**: Synthesizes the response with strict citations.
-- **`CLARIFY`**: Solicits missing context (e.g., "Which country do you work in?").
-- **`RETRIEVE MORE`**: Triggers a query reformulation and re-searches.
-- **`ESCALATE`**: Generates a human audit ticket (`ESC-XXXXX`) for contradictions or restricted access.
-**Reasoning:**
-Linear LLM chains cannot gracefully handle failure. LangGraph enables bounded loops (e.g., allowing exactly one retrieval retry) and explicit fallback states, preventing the LLM from guessing when it lacks sufficient evidence.
-
-### 6. Streaming SSE & NVIDIA NIM Integration
-**Implementation:**
-The backend utilizes Server-Sent Events (SSE) to stream tokens directly to the React frontend. It integrates state-of-the-art **NVIDIA NIM Models** (`gpt-oss-20b` for chat, `llama-nemotron-embed` for embeddings).
-**Reasoning:**
-Legal queries require massive context windows and deep reasoning, which can take several seconds. Streaming via SSE brings the Time to First Token (TTFT) under 300ms, creating a highly responsive user experience. 
+## 🌟 100/100 Agentic Readiness (Ora Audit Compliant)
+LegalLens AI is built not just for humans, but for autonomous AI agents. We have successfully achieved a **100/100 Agentic Readiness Score** by implementing industry-standard protocols:
+- **Markdown Content Negotiation**: Native support for `Accept: text/markdown` headers at the edge, returning agent-optimized documentation instead of HTML.
+- **REST & Function Calling Compatibility**: Standardized OpenAPI specifications (`/api/openapi.json`) with strict `operationId` definitions, typed Pydantic schemas, and REST rate-limiting headers.
+- **Discoverability**: Fully fleshed out `llms.txt` and `docs.html` portals allowing agents to seamlessly discover and execute our API toolings.
 
 ---
 
-## 🌐 Cloud Deployment Architecture
+## 🏗️ System Architecture & Implementation Details
 
-The system is designed to be cloud-native. The recommended deployment strategy for production environments is:
+The system is a unified monorepo containing a **FastAPI backend** (handling retrieval, graph execution, and embeddings) and a **React 18 + Vite frontend** (handling the chat UI and document management).
 
-### Backend: Azure Container Apps
-The FastAPI backend and ChromaDB/SQLite storage are containerized using `Dockerfile.backend` and deployed to Azure Container Apps. 
-- **Automated CI/CD**: A GitHub Actions workflow (`.github/workflows/deploy-azure.yml`) automatically builds the image, pushes it to GitHub Container Registry, and updates the Azure Container App upon every push to `main`.
-- **Environment**: Injects NVIDIA API keys and configuration securely via GitHub Secrets.
+### 1. Document Ingestion & Chunking
+Documents (PDF, DOCX, Markdown) are ingested and split using a **Structure-Aware Section Chunker**. Instead of blindly splitting text every 500 tokens, the parser identifies logical document boundaries (e.g., "Scope", "Eligibility", "Exceptions"). This preserves semantic meaning and drastically improves retrieval precision.
 
-### Frontend: Vercel (Direct Deployment)
-The React 18 + Vite frontend is deployed directly to **Vercel**. 
-- By linking this GitHub repository directly in the Vercel Dashboard, Vercel natively handles the build process, edge caching, and global CDN delivery without requiring manual GitHub Actions.
+### 2. Rich Metadata & Access Control (RBAC)
+Every chunk stored in ChromaDB contains 12 fields of metadata: `document_id`, `jurisdiction`, `version`, `effective_date`, `status`, and `access_roles`. During retrieval, a pre-filter is injected into the vector query to guarantee database-level security and prevent LLM prompt injection attacks.
 
-*(Live deployment URLs will be attached here upon completion of the environment setup.)*
+### 3. Pre-LLM Metadata Precedence Resolution
+When multiple versions of a policy are retrieved, they are sorted deterministically in Python using strict rules (`Status > Authority > Jurisdiction > Effective Date > Version`). This completely eliminates "version hallucinations".
+
+### 4. Hybrid Search with RRF (Reciprocal Rank Fusion)
+The retrieval engine runs two simultaneous searches:
+- **Dense Vector Search (NVIDIA Llama Nemotron)**: Captures semantic meaning.
+- **Sparse Keyword Search (BM25)**: Captures exact keyword matches.
+The results are fused using the RRF algorithm, guaranteeing high recall for both abstract concepts and exact legal identifiers.
+
+### 5. LangGraph Decision State Machine
+The core reasoning engine evaluates retrieved evidence across 6 dimensions (Relevance, Completeness, Freshness, Authority, Conflict, Scope). Based on the score, the state machine routes to:
+- **`ANSWER`**: Synthesizes the response with strict citations.
+- **`CLARIFY`**: Solicits missing context.
+- **`RETRIEVE MORE`**: Triggers a query reformulation and re-searches.
+- **`ESCALATE`**: Generates a human audit ticket.
+
+---
+
+## 🌐 Full-Stack Vercel Monorepo Deployment
+
+We have migrated to a fully unified, modern **Vercel Zero-Config Architecture**. Both the React frontend and the Python backend are deployed together.
+
+- **Frontend (Vite/React)**: Handled by Vercel's static builder.
+- **Backend (FastAPI)**: Handled seamlessly by Vercel's `@vercel/python` Serverless Functions (`api/index.py`).
+- **Edge Routing**: A modern `vercel.json` rewrite configuration perfectly routes `/api/*` traffic and `Accept: text/markdown` negotiation headers directly to the Python backend, while serving the Vite SPA to human users.
+- **Ephemeral Storage Safe**: Modified document upload systems to utilize the OS `/tmp` directory, preventing crashes in Vercel's read-only serverless environment.
+
+*(Note: Because Vercel Serverless Functions are stateless, ChromaDB data uploaded to `/tmp` will not persist across cold boots. For persistent deployments, attach a cloud vector database like Pinecone).*
 
 ---
 
@@ -91,8 +73,8 @@ OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
 OPENAI_API_KEY=nvapi-your-key-here
 OPENAI_CHAT_MODEL=openai/gpt-oss-20b
 OPENAI_EMBED_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2
-CHROMA_DIR=./backend/data/chroma
-DB_PATH=./backend/data/sessions.db
+CHROMA_DIR=/tmp/chroma
+DB_PATH=/tmp/sessions.db
 JWT_SECRET=super-secret-key
 LLM_OFFLINE=false
 ```
@@ -111,7 +93,7 @@ python scripts/seed_corpus.py
 # Start the FastAPI server
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*Backend runs at `http://localhost:8000` with Swagger Docs at `http://localhost:8000/docs`.*
+*Backend runs at `http://localhost:8000` with Swagger Docs at `http://localhost:8000/api/docs`.*
 
 ### 3. Frontend Setup
 In a new terminal, start the Vite React application:
@@ -121,11 +103,3 @@ npm install
 npm run dev
 ```
 *Frontend runs at `http://localhost:5173`.*
-
----
-
-## 🧪 Testing Scenarios
-Log into the frontend using the demo roles to test the decision engine:
-1. **ANSWER**: Ask *"What is the annual leave policy?"* (Resolves to active policy).
-2. **CLARIFY**: Ask *"Can I carry forward leave?"* (Prompts for your jurisdiction).
-3. **ESCALATE**: Ask *"What is the executive bonus formula?"* (Standard employee receives a restriction escalation).

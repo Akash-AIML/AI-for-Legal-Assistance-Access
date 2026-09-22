@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import threading
 from pathlib import Path
 
@@ -48,6 +49,13 @@ tags_metadata = [
     },
 ]
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Asynchronously initialize vector index in background thread to prevent Azure Web App 503 health probe timeouts
+    threading.Thread(target=store.rebuild_index, daemon=True).start()
+    yield
+
+
 app = FastAPI(
     title="LegalLens — AI Legal Document Intelligence API",
     version="2.0.0",
@@ -71,6 +79,7 @@ Uploaded documents are treated as untrusted data. Document content is isolated f
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 @app.exception_handler(StarletteHTTPException)
@@ -89,7 +98,12 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://ai-for-legal-assistance-access-pi.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -97,11 +111,18 @@ app.add_middleware(
 @app.middleware("http")
 async def add_rest_headers(request: Request, call_next):
     response = await call_next(request)
+    # REST headers
     response.headers["X-RateLimit-Limit"] = "100"
     response.headers["X-RateLimit-Remaining"] = "99"
     response.headers["X-RateLimit-Reset"] = "3600"
     response.headers["API-Version"] = "v1"
     response.headers["Deprecation"] = "false"
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
     return response
 
 app.include_router(auth_routes.router)
@@ -115,10 +136,6 @@ app.include_router(tts_routes.router)
 _settings = get_settings()
 
 
-@app.on_event("startup")
-def startup():
-    # Asynchronously initialize vector index in background thread to prevent Azure Web App 503 health probe timeouts
-    threading.Thread(target=store.rebuild_index, daemon=True).start()
 
 
 class HealthResponse(BaseModel):

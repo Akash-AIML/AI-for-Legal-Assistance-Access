@@ -9,8 +9,10 @@ a stub chat responder are used so the pipeline runs fully offline (demo mode).
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
+import time
 from typing import Any, Iterable, Sequence
 
 from openai import OpenAI
@@ -18,6 +20,7 @@ from openai import OpenAI
 from config import get_settings
 
 _settings = get_settings()
+logger = logging.getLogger(__name__)
 
 OFFLINE_MODE = _settings.llm_offline
 
@@ -26,31 +29,37 @@ def _client() -> OpenAI:
     return OpenAI(api_key=_settings.openai_api_key or "sk-local", base_url=_settings.openai_base_url)
 
 
-import time
-
 def chat(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.1,
     model: str | None = None,
     max_tokens: int | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
     """Return a plain-text completion for the given OpenAI-style messages."""
     if OFFLINE_MODE:
         return _offline_chat(messages)
     selected_model = model or _settings.openai_chat_model
     t0 = time.time()
-    print(f"\033[93m⏱️ [PERF] LLM Chat starting | Model: {selected_model} | MaxTokens: {max_tokens} | Messages: {len(messages)}\033[0m", flush=True)
-    resp = _client().chat.completions.create(
-        model=selected_model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    txt = resp.choices[0].message.content or ""
-    dt = (time.time() - t0) * 1000.0
-    print(f"\033[92m⏱️ [PERF] LLM Chat finished in {dt:.1f}ms | Output len: {len(txt)} chars\033[0m", flush=True)
-    return txt
+    logger.debug("LLM Chat starting | model=%s | max_tokens=%s | messages=%d", selected_model, max_tokens, len(messages))
+    kwargs: dict[str, Any] = {
+        "model": selected_model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if response_format:
+        kwargs["response_format"] = response_format
+    try:
+        resp = _client().chat.completions.create(**kwargs)
+        txt = resp.choices[0].message.content or ""
+        dt = (time.time() - t0) * 1000.0
+        logger.debug("LLM Chat finished in %.1fms | output_len=%d chars", dt, len(txt))
+        return txt
+    except Exception as exc:
+        logger.warning("LLM Chat API call failed (%s). Falling back to resilient offline responder.", exc)
+        return _offline_chat(messages)
 
 
 def stream_chat(
@@ -59,37 +68,44 @@ def stream_chat(
     temperature: float = 0.1,
     model: str | None = None,
 ) -> Iterable[str]:
+    """Stream chat completion tokens from the configured LLM."""
     if OFFLINE_MODE:
         for tok in _offline_chat(messages).split(" "):
             yield tok + " "
         return
     selected_model = model or _settings.openai_chat_model
     t0 = time.time()
-    print(f"\033[93m⏱️ [PERF] LLM Stream Chat starting | Model: {selected_model}\033[0m", flush=True)
-    resp = _client().chat.completions.create(
-        model=selected_model,
-        messages=messages,
-        temperature=temperature,
-        stream=True,
-    )
-    first_token = True
-    for chunk in resp:
-        if first_token:
-            ttft = (time.time() - t0) * 1000.0
-            print(f"\033[92m⏱️ [PERF] Stream Time-To-First-Token (TTFT): {ttft:.1f}ms\033[0m", flush=True)
-            first_token = False
-        delta = chunk.choices[0].delta.content if chunk.choices else None
-        if delta:
-            yield delta
+    logger.debug("LLM Stream Chat starting | model=%s", selected_model)
+    try:
+        resp = _client().chat.completions.create(
+            model=selected_model,
+            messages=messages,
+            temperature=temperature,
+            stream=True,
+        )
+        first_token = True
+        for chunk in resp:
+            if first_token:
+                ttft = (time.time() - t0) * 1000.0
+                logger.debug("Stream TTFT: %.1fms", ttft)
+                first_token = False
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                yield delta
+    except Exception as exc:
+        logger.warning("LLM Stream API call failed (%s). Falling back to resilient offline tokens.", exc)
+        for tok in _offline_chat(messages).split(" "):
+            yield tok + " "
+
 
 
 def embed_texts(texts: Sequence[str], input_type: str = "query") -> list[list[float]]:
     """Batch-embed texts using the configured embedding model."""
     if OFFLINE_MODE:
         return [_offline_embed(t) for t in texts]
-    
+
     t0 = time.time()
-    print(f"\033[93m⏱️ [PERF] Embedding starting | Model: {_settings.openai_embed_model} | Batch size: {len(texts)} | Type: {input_type}\033[0m", flush=True)
+    logger.debug("Embedding starting | model=%s | batch_size=%d | type=%s", _settings.openai_embed_model, len(texts), input_type)
 
     extra: dict[str, Any] = {}
     if "nvidia" in _settings.openai_base_url.lower() or "nvidia" in _settings.openai_embed_model.lower():
@@ -103,11 +119,12 @@ def embed_texts(texts: Sequence[str], input_type: str = "query") -> list[list[fl
     # sort by index to keep order stable
     ordered = sorted(resp.data, key=lambda d: d.index)
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[92m⏱️ [PERF] Embedding finished in {dt:.1f}ms (dim={len(ordered[0].embedding) if ordered else 0})\033[0m", flush=True)
+    logger.debug("Embedding finished in %.1fms | dim=%d", dt, len(ordered[0].embedding) if ordered else 0)
     return [d.embedding for d in ordered]
 
 
 def embed_query(text: str) -> list[float]:
+    """Embed a single query string."""
     return embed_texts([text])[0]
 
 
@@ -130,7 +147,7 @@ def synthesize_speech(text: str, voice: str = "alloy") -> bytes:
     """Synthesize text into speech audio bytes using OpenAI-compatible audio API."""
     if not _settings.openai_api_key:
         raise RuntimeError("Speech synthesis requires OPENAI_API_KEY in .env.")
-    
+
     # Primary model: tts-1, with fallback to gpt-4o-mini-tts or audio model
     models_to_try = ["tts-1", "gpt-4o-mini-tts", "gpt-4o-audio-preview"]
     last_err = None
@@ -155,12 +172,11 @@ def synthesize_speech(text: str, voice: str = "alloy") -> bytes:
 tts_text = synthesize_speech
 
 
-
 # ---------------------------------------------------------------------------
 # Offline fallbacks (demo mode, no API key)
 # ---------------------------------------------------------------------------
 
-_DIM = 64
+_DIM = 2048
 
 
 def _offline_embed(text: str) -> list[float]:
@@ -175,6 +191,7 @@ def _offline_embed(text: str) -> list[float]:
 
 
 def _offline_chat(messages: list[dict[str, str]]) -> str:
+    """Return a deterministic offline stub response."""
     last = messages[-1].get("content", "") if messages else ""
     return (
         "[offline demo mode: no LLM configured. Configure OPENAI_BASE_URL and "

@@ -17,7 +17,7 @@ import {
   Trash2,
   MessageSquare
 } from "lucide-react"
-import { api, type Citation } from "@/lib/api"
+import { api, type Citation, type StreamMetaEvent } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -180,7 +180,7 @@ export function LegalChat() {
         console.log("%c⏱️ [FE-PERF] Dispatching question to SSE stream:", "color: #38bdf8; font-weight: bold;", q)
         const t0 = performance.now()
 
-        let metaData: any = null
+        let metaData: StreamMetaEvent | null = null
         let accumulatedText = ""
         let firstTokenLogged = false
 
@@ -190,7 +190,7 @@ export function LegalChat() {
         await api.legal.chatStream(
           q,
           currentId || undefined,
-          (meta) => {
+          (meta: StreamMetaEvent) => {
             metaData = meta
             const dtMeta = performance.now() - t0
             console.log(`%c⏱️ [FE-PERF] Received metadata & ${meta.citations?.length || 0} citations in ${dtMeta.toFixed(1)}ms`, "color: #a855f7; font-weight: bold;")
@@ -235,13 +235,14 @@ export function LegalChat() {
         console.log(`%c⏱️ [FE-PERF] Stream Complete in ${totalDt.toFixed(1)}ms (${(totalDt / 1000).toFixed(2)}s)`, "color: #4ade80; font-weight: bold;")
         console.timeEnd("⏱️ [FE-PERF] Streaming Chat Request Total")
 
+        const streamMeta = metaData as StreamMetaEvent | null
         const assistantMsg: Message = {
           role: "assistant",
           content: accumulatedText,
           meta: {
-            status: metaData?.status || "SUPPORTED",
-            decision: metaData?.decision || "ANSWER",
-            citations: metaData?.citations || [],
+            status: streamMeta?.status || "SUPPORTED",
+            decision: streamMeta?.decision || "ANSWER",
+            citations: streamMeta?.citations || [],
           },
         }
 
@@ -250,10 +251,10 @@ export function LegalChat() {
           s.id === currentId ? { ...s, messages: finalMessages } : s
         )
         saveSessions(updatedSessions)
-      } catch (e: any) {
+      } catch (e: unknown) {
         const errorMsg: Message = {
           role: "assistant",
-          content: `Error: ${e.message}`,
+          content: `Error: ${e instanceof Error ? e.message : "An error occurred during chat streaming"}`,
         }
         const finalMessages = [...newMessages, errorMsg]
         setMessages(finalMessages)
@@ -382,9 +383,18 @@ export function LegalChat() {
                       return (
                         <div
                           key={s.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Select chat session: ${s.title}`}
                           onClick={() => selectSession(s)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault()
+                              selectSession(s)
+                            }
+                          }}
                           className={cn(
-                            "flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all text-xs group",
+                            "flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all text-xs group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                             isActive
                               ? "bg-secondary text-foreground font-semibold shadow-sm border-l-2 border-primary"
                               : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
@@ -395,10 +405,10 @@ export function LegalChat() {
                               {s.title}
                             </p>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-xs text-muted-foreground">
                                 {formatDate(s.createdAt)}
                               </span>
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-xs text-muted-foreground">
                                 • {s.messages?.length || 0} msgs
                               </span>
                             </div>
@@ -406,6 +416,7 @@ export function LegalChat() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            aria-label={`Delete chat session ${s.title}`}
                             onClick={(e) => deleteSession(e, s.id)}
                             className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-opacity shrink-0"
                           >
@@ -424,7 +435,7 @@ export function LegalChat() {
         {/* Chat Feed & Input Area */}
         <div className="flex-1 overflow-hidden rounded-2xl glass-panel border border-border/80 flex flex-col">
           {/* Scrollable Message List */}
-          <ScrollArea className="flex-1 p-4 sm:p-6">
+          <ScrollArea className="flex-1 p-4 sm:p-6" role="log" aria-label="Chat conversation" aria-live="polite">
             <div className="space-y-6">
               {/* Empty State Suggestion Prompt Cards */}
               {messages.length === 0 && (
@@ -450,9 +461,11 @@ export function LegalChat() {
                   <StaggerContainer staggerDelay={0.06} className="w-full max-w-lg space-y-2">
                     {SUGGESTIONS.map((s) => (
                       <StaggerItem key={s} direction="up">
-                        <Card
-                          className="p-3 text-left cursor-pointer glass-panel hover:border-primary/40 transition-all group"
+                        <button
+                          type="button"
+                          className="w-full p-3 text-left cursor-pointer glass-panel rounded-xl border border-border/80 hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all group"
                           onClick={() => send(s)}
+                          aria-label={`Ask suggestion: ${s}`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs sm:text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
@@ -460,7 +473,7 @@ export function LegalChat() {
                             </span>
                             <Sparkles className="h-3.5 w-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
                           </div>
-                        </Card>
+                        </button>
                       </StaggerItem>
                     ))}
                   </StaggerContainer>
@@ -491,13 +504,13 @@ export function LegalChat() {
                         <div className="flex items-center gap-2">
                           <Badge
                             variant={getStatusVariant(m.meta.status)}
-                            className="text-[10px] gap-1 px-2 py-0.5"
+                            className="text-xs gap-1 px-2 py-0.5"
                           >
                             {STATUS_CONFIG[m.meta.status]?.icon}
                             <span>{STATUS_CONFIG[m.meta.status]?.label || m.meta.status}</span>
                           </Badge>
                           {m.meta.decision === "ESCALATE" && (
-                            <Badge variant="destructive" className="text-[10px] gap-1 px-2 py-0.5">
+                            <Badge variant="destructive" className="text-xs gap-1 px-2 py-0.5">
                               <Lock className="h-3 w-3" /> Escalated to Counsel
                             </Badge>
                           )}
@@ -551,15 +564,15 @@ export function LegalChat() {
                                     </span>
                                     <Badge
                                       variant="outline"
-                                      className="text-[9px] px-1.5 py-0 shrink-0"
+                                      className="text-xs px-1.5 py-0 shrink-0"
                                     >
                                       {c.jurisdiction || "GLOBAL"}
                                     </Badge>
                                   </div>
-                                  <p className="text-[11px] font-mono text-muted-foreground mb-1.5">
+                                  <p className="text-xs font-mono text-muted-foreground mb-1.5">
                                     Section: {c.section}
                                   </p>
-                                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed bg-muted/40 p-2 rounded-lg border border-border/40 font-mono text-[11px]">
+                                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed bg-muted/40 p-2 rounded-lg border border-border/40 font-mono">
                                     "{c.snippet}"
                                   </p>
                                 </Card>
@@ -611,17 +624,21 @@ export function LegalChat() {
           <div className="border-t border-border/80 p-3 bg-card/80 backdrop-blur-md">
             <div className="flex items-center gap-2">
               <input
+                id="chat-input"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
                 placeholder="Ask a question about your uploaded documents..."
+                aria-label="Chat query input"
+                aria-required="true"
                 className="flex-1 bg-muted/40 border border-border/60 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 transition-colors"
               />
               <Button
                 onClick={() => send()}
                 disabled={busy || !input.trim()}
                 size="default"
+                aria-label="Send message"
                 className="gap-2 font-semibold px-4 shadow-sm"
               >
                 <span>Send</span>

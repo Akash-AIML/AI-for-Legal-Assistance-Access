@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { FileSearch, HelpCircle, Paperclip } from "lucide-react"
+import { FileSearch, HelpCircle, Paperclip, Printer } from "lucide-react"
 import { api, type LawyerBriefResult, type DocumentInfo } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,8 +28,9 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
     try {
       const res = await api.legal.brief(selectedDoc)
       setResult(res)
-    } catch (err: any) {
-      setError(err.message || "Brief generation failed")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg || "Brief generation failed")
     } finally {
       setLoading(false)
     }
@@ -52,14 +53,17 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileSearch className="h-5 w-5 text-primary" /> Generate Brief
+              <FileSearch className="h-5 w-5 text-primary" aria-hidden="true" /> Generate Brief
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end gap-4">
               <div className="flex-1">
+                <label className="text-sm font-medium text-muted-foreground block mb-1.5" htmlFor="select-brief-doc">
+                  Document for Brief
+                </label>
                 <Select value={selectedDoc} onValueChange={setSelectedDoc}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger id="select-brief-doc" aria-label="Select document to generate lawyer brief" className="w-full">
                     <SelectValue placeholder="Choose a document..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -80,10 +84,10 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={generate} disabled={!selectedDoc || loading} className="gap-2">
+              <Button onClick={generate} disabled={!selectedDoc || loading} aria-label="Generate Lawyer Brief" className="gap-2">
                 {loading ? (
                   <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -91,7 +95,7 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
                   </>
                 ) : (
                   <>
-                    <FileSearch className="h-4 w-4" /> Generate Brief
+                    <FileSearch className="h-4 w-4" aria-hidden="true" /> Generate Brief
                   </>
                 )}
               </Button>
@@ -120,8 +124,29 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            role="region"
+            aria-label="Generated Lawyer Brief"
+            aria-live="polite"
             className="space-y-6"
           >
+            {/* Action Bar with Print / PDF Export */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-primary/30 bg-primary/5">
+              <div>
+                <h2 className="font-heading font-bold text-base text-foreground">Pre-Consultation Brief Ready</h2>
+                <p className="text-xs text-muted-foreground">Download or print this brief to bring directly to your attorney or legal aid clinic.</p>
+              </div>
+              <Button
+                onClick={() => window.print()}
+                variant="default"
+                size="sm"
+                aria-label="Print or save lawyer brief as PDF"
+                className="gap-2 font-semibold shrink-0 shadow-sm"
+              >
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                <span>Print / Save PDF</span>
+              </Button>
+            </div>
+
             {/* Situation */}
             <ScrollReveal>
               <Card>

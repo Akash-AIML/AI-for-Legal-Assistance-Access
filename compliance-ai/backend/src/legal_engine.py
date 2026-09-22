@@ -56,7 +56,7 @@ Structure:
     }
   ]
 }
-Extract max 3 critical findings and max 2 obligations."""
+Extract all significant findings and obligations across the entire agreement (up to 8 key findings and 6 obligations)."""
 
 _COMPARE_SYSTEM = """You are a legal contract comparison AI. Return ONLY a single raw valid JSON object (no markdown, no extra text).
 Structure:
@@ -72,7 +72,7 @@ Structure:
     }
   ]
 }
-Compare max 4-5 key changed/unique clause types (PAYMENT, TERMINATION, LIABILITY, INDEMNITY, GOVERNING_LAW, SCOPE_OF_WORK).
+Compare all key changed/unique clause types (PAYMENT, TERMINATION, LIABILITY, INDEMNITY, GOVERNING_LAW, SCOPE_OF_WORK, NON_COMPETE, DISPUTE_RESOLUTION).
 Status must be: CHANGED, SAME, ADDED, REMOVED."""
 
 _LAWYER_BRIEF_SYSTEM = """You are a legal consultation assistant. Return ONLY a single raw valid JSON object:
@@ -89,27 +89,71 @@ _LAWYER_BRIEF_SYSTEM = """You are a legal consultation assistant. Return ONLY a 
 # ---------------------------------------------------------------------------
 
 def _extract_json(raw: str) -> dict:
-    """Extract JSON object from LLM output safely with auto-repair for truncated JSON."""
-    res = None
-    try:
-        res = json.loads(raw)
-    except Exception:
-        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
-        candidate = match.group(1) if match else raw
-        match_obj = re.search(r"[\{\[].*", candidate, re.DOTALL)
-        if match_obj:
-            snippet = match_obj.group(0).strip()
-            # Auto-repair trailing truncated JSON by trying bracket completions
-            for suffix in ["", "}", "]}", "\"]}", "\"}]}", "}\n]}", "\"\n}\n]}"]:
-                try:
-                    res = json.loads(snippet + suffix)
-                    break
-                except Exception:
-                    pass
+    """Extract JSON object or array from LLM output safely with robust fence and boundary detection."""
+    if not raw or not isinstance(raw, str):
+        return {}
 
-    if isinstance(res, list):
-        return {"items": res, "findings": res, "comparisons": res, "obligations": []}
-    return res if isinstance(res, dict) else {}
+    text = raw.strip()
+
+    # 1. Direct parse attempt
+    try:
+        res = json.loads(text)
+        if isinstance(res, dict):
+            return res
+        if isinstance(res, list):
+            return {"items": res, "findings": res, "comparisons": res, "obligations": []}
+    except Exception:
+        pass
+
+    # 2. Extract content from markdown code fence
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    candidate = fence_match.group(1).strip() if fence_match else text
+
+    try:
+        res = json.loads(candidate)
+        if isinstance(res, dict):
+            return res
+        if isinstance(res, list):
+            return {"items": res, "findings": res, "comparisons": res, "obligations": []}
+    except Exception:
+        pass
+
+    # 3. Find outer boundaries of JSON object or array
+    start_brace = candidate.find("{")
+    end_brace = candidate.rfind("}")
+    if start_brace != -1 and end_brace > start_brace:
+        try:
+            res = json.loads(candidate[start_brace : end_brace + 1])
+            if isinstance(res, dict):
+                return res
+        except Exception:
+            pass
+
+    start_bracket = candidate.find("[")
+    end_bracket = candidate.rfind("]")
+    if start_bracket != -1 and end_bracket > start_bracket:
+        try:
+            res = json.loads(candidate[start_bracket : end_bracket + 1])
+            if isinstance(res, list):
+                return {"items": res, "findings": res, "comparisons": res, "obligations": []}
+        except Exception:
+            pass
+
+    # 4. Fallback for truncated JSON: close unclosed brackets
+    if start_brace != -1:
+        sub = candidate[start_brace:]
+        open_curly = sub.count("{") - sub.count("}")
+        open_square = sub.count("[") - sub.count("]")
+        if open_curly > 0 or open_square > 0:
+            repair = sub + ("]" * max(0, open_square)) + ("}" * max(0, open_curly))
+            try:
+                res = json.loads(repair)
+                if isinstance(res, dict):
+                    return res
+            except Exception:
+                pass
+
+    return {}
 
 
 def _parse_clause_type(s: str) -> ClauseType:
@@ -130,11 +174,30 @@ def _parse_risk_level(s: str) -> RiskLevel:
 # Fast Document X-Ray Analysis
 # ---------------------------------------------------------------------------
 
+def _select_representative_chunks(
+    chunks: list[RetrievedEvidence],
+    max_chunks: int = 25,
+    max_chars_per_chunk: int = 1200,
+) -> str:
+    """Select representative chunks across the entire document (beginning, middle, end) ensuring full coverage."""
+    if not chunks:
+        return ""
+    if len(chunks) <= max_chunks:
+        selected = chunks
+    else:
+        # Uniform sampling across document to ensure end-of-contract clauses (Indemnity, Termination, Governing Law) are included
+        step = len(chunks) / max_chunks
+        selected = [chunks[int(i * step)] for i in range(max_chunks)]
+    return "\n\n".join(f"[{e.section}]\n{e.text[:max_chars_per_chunk]}" for e in selected)
+
+
 def analyze_document(
     document_id: str,
     title: str,
     chunks: list[RetrievedEvidence],
+    language: str = "en",
 ) -> DocumentXRayResult:
+    """Run full-contract Document X-Ray analysis across all sections."""
     if not chunks:
         return DocumentXRayResult(
             document_id=document_id,
@@ -143,10 +206,12 @@ def analyze_document(
             summary="No content available for analysis.",
         )
 
-    # Truncate to top 5 chunks for fast < 8s inference
-    doc_text = "\n\n".join(f"[{e.section}]\n{e.text[:400]}" for e in chunks[:5])
+    # Full document coverage: sample up to 25 representative chunks across beginning, middle, and end
+    doc_text = _select_representative_chunks(chunks, max_chunks=25, max_chars_per_chunk=1200)
     safe_doc = sanitize_for_llm(doc_text)
     user_prompt = f"DocID: {document_id}\nTitle: {title}\nContent:\n{safe_doc}"
+    if language == "hi":
+        user_prompt += "\n\nIMPORTANT: Provide the 'summary', 'explanation', 'why_it_matters', and 'lawyer_question' fields in Hindi (हिन्दी) so it is accessible to Indian citizens. Keep legal clause terms in English."
 
     if _settings.llm_offline:
         return _offline_xray(document_id, title, chunks)
@@ -154,7 +219,8 @@ def analyze_document(
     raw = chat(
         [{"role": "system", "content": _XRAY_SYSTEM}, {"role": "user", "content": user_prompt}],
         temperature=0.1,
-        max_tokens=600,
+        max_tokens=1000,
+        response_format={"type": "json_object"},
     )
 
     data = _extract_json(raw)
@@ -219,9 +285,9 @@ def compare_documents(
             summary="No content available for comparison.",
         )
 
-    # Truncate to top 5 key chunks per document for fast comparison
-    text_a = "\n\n".join(f"[{e.section}]\n{e.text[:400]}" for e in chunks_a[:5])
-    text_b = "\n\n".join(f"[{e.section}]\n{e.text[:400]}" for e in chunks_b[:5])
+    # Full document coverage: sample up to 20 representative chunks across entire documents
+    text_a = _select_representative_chunks(chunks_a, max_chunks=20, max_chars_per_chunk=1000)
+    text_b = _select_representative_chunks(chunks_b, max_chunks=20, max_chars_per_chunk=1000)
 
     safe_a = sanitize_for_llm(text_a)
     safe_b = sanitize_for_llm(text_b)
@@ -234,6 +300,7 @@ def compare_documents(
         [{"role": "system", "content": _COMPARE_SYSTEM}, {"role": "user", "content": user_prompt}],
         temperature=0.1,
         max_tokens=650,
+        response_format={"type": "json_object"},
     )
 
     data = _extract_json(raw)
@@ -292,6 +359,7 @@ def generate_lawyer_brief(
         [{"role": "system", "content": _LAWYER_BRIEF_SYSTEM}, {"role": "user", "content": user_prompt}],
         temperature=0.2,
         max_tokens=350,
+        response_format={"type": "json_object"},
     )
 
     data = _extract_json(raw)

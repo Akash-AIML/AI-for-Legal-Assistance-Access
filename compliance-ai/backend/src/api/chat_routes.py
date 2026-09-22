@@ -1,39 +1,49 @@
 """Chat routes: run the LangGraph decision workflow, persist history + audit."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import logging
+import time
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from auth import get_current_user, get_optional_user, to_frame
 from graph.builder import get_graph
 from memory import store as memory
 from models import Decision
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/chat", tags=["Knowledge Retrieval & Decisions"])
 
 
-@router.get("/sessions")
-def sessions(user: dict = Depends(get_optional_user)):
+class ChatRequest(BaseModel):
+    question: str
+    session_id: str | None = None
+    message: str | None = None  # alias for backwards compat
+
+
+@router.get("/sessions", operation_id="list_chat_sessions", description="List all chat sessions for the current user.")
+def sessions(user: dict = Depends(get_optional_user)) -> dict:
     return {"sessions": memory.list_sessions(user["username"])}
 
 
-@router.get("/history")
-def history(session_id: str, user: dict = Depends(get_optional_user)):
+@router.get("/history", operation_id="get_chat_history", description="Retrieve message history for a specific chat session.")
+def history(session_id: str, user: dict = Depends(get_optional_user)) -> dict:
     msgs = memory.get_history(session_id, limit=50)
     return {"session_id": session_id, "messages": msgs}
 
 
-import time
-
-@router.post("")
-def chat(payload: dict, user: dict = Depends(get_optional_user)):
+@router.post("", operation_id="send_chat_message", description="Send a message to the LangGraph Evidence Decision Engine. Returns an SSE stream of tokens.")
+def chat(body: ChatRequest, user: dict = Depends(get_optional_user)):
     t_start = time.time()
-    question = (payload.get("question") or payload.get("message") or "").strip()
+    question = (body.question or body.message or "").strip()
     if not question:
         return {"error": "empty message"}
 
-    print(f"\n\033[94m🚀 [API-PERF] POST /api/chat started | Question: '{question[:60]}...'\033[0m", flush=True)
+    logger.info("POST /api/chat started | question='%s'", question[:60])
 
-    session_id = payload.get("session_id")
+    session_id = body.session_id
     session = memory.get_session(session_id) if session_id else None
     if not session:
         session = memory.create_session(user["username"])
@@ -155,7 +165,7 @@ from graph.nodes import SYSTEM_GROUNDED, node_understand, node_retrieve, node_as
 def chat_stream(payload: dict, user: dict = Depends(get_optional_user)):
     question = (payload.get("question") or payload.get("message") or "").strip()
     if not question:
-        return {"error": "empty message"}
+        raise HTTPException(status_code=400, detail="Empty question or message")
 
     session_id = payload.get("session_id")
     session = memory.get_session(session_id) if session_id else None

@@ -151,6 +151,8 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
+          role="region"
+          aria-label="Document upload area"
           className={cn(
             "relative rounded-2xl border-2 border-dashed p-8 md:p-12 transition-all duration-300 glass-panel text-center",
             dragActive
@@ -182,6 +184,7 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
               <Button
                 variant="default"
                 size="lg"
+                aria-label={uploading ? "Uploading documents" : "Choose files to upload"}
                 className="gap-2 font-semibold shadow-sm hover:scale-[1.02] transition-transform"
                 disabled={uploading}
               >

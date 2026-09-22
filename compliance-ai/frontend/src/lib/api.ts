@@ -52,10 +52,10 @@ export const api = {
   },
 
   legal: {
-    xray: (documentId: string) =>
-      request<XRayResult>("/legal/xray", {
+    xray: (documentId: string, language: string = "en") =>
+      request<XRayResult>("/legal/analyze", {
         method: "POST",
-        body: JSON.stringify({ document_id: documentId }),
+        body: JSON.stringify({ document_id: documentId, language }),
       }),
     compare: (docA: string, docB: string) =>
       request<CompareResult>("/legal/compare", {
@@ -80,7 +80,7 @@ export const api = {
     chatStream: async (
       question: string,
       sessionId: string | undefined,
-      onMeta: (meta: any) => void,
+      onMeta: (meta: StreamMetaEvent) => void,
       onToken: (token: string) => void
     ) => {
       const token = localStorage.getItem("legallens_token")
@@ -114,7 +114,7 @@ export const api = {
           if (trimmed === "[DONE]") return
           if (!trimmed) continue
           try {
-            const parsed = JSON.parse(trimmed)
+            const parsed = JSON.parse(trimmed) as StreamEvent
             if (parsed.type === "meta") {
               onMeta(parsed)
             } else if (parsed.type === "token" && parsed.content) {
@@ -245,3 +245,18 @@ export interface Citation {
   version: string
   snippet: string
 }
+
+export interface StreamMetaEvent {
+  type: "meta"
+  session_id: string
+  status: string
+  decision: string
+  citations: Citation[]
+}
+
+export interface StreamTokenEvent {
+  type: "token"
+  content: string
+}
+
+export type StreamEvent = StreamMetaEvent | StreamTokenEvent

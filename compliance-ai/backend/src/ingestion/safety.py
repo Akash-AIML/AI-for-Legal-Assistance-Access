@@ -5,7 +5,10 @@ is treated as evidence, never as executable instructions.
 """
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 UNTRUSTED_MARKER = "<untrusted_document_content>"
 UNTRUSTED_END_MARKER = "</untrusted_document_content>"
@@ -58,5 +61,5 @@ def sanitize_for_llm(content: str) -> str:
     """
     matches = detect_injection(content)
     if matches:
-        print(f"[safety] Potential injection patterns detected: {matches}")
+        logger.warning("Potential injection patterns detected: %s", matches)
     return wrap_untrusted(content)

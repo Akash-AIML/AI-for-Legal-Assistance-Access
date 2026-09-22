@@ -5,9 +5,12 @@ freshness checks. Hybrid retrieval fuses dense + BM25 by Reciprocal Rank Fusion.
 """
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 import threading
 from typing import Optional
 
+logger = logging.getLogger(__name__)
 import chromadb
 from rank_bm25 import BM25Okapi
 
@@ -71,14 +74,50 @@ def upsert_chunks(chunks: list[Chunk]) -> int:
         return 0
     col = get_collection()
     embs = embed_texts([c.text for c in chunks], input_type="passage")
-    col.upsert(
-        ids=[c.chunk_id for c in chunks],
-        embeddings=embs,
-        documents=[c.text for c in chunks],
-        metadatas=[_flat_meta(c) for c in chunks],
-    )
-    rebuild_index()
+    try:
+        col.upsert(
+            ids=[c.chunk_id for c in chunks],
+            embeddings=embs,
+            documents=[c.text for c in chunks],
+            metadatas=[_flat_meta(c) for c in chunks],
+        )
+    except Exception as exc:
+        if "dimension" in str(exc).lower():
+            logger.warning("Chroma collection dimension mismatch, recreating collection: %s", exc)
+            with _client_lock:
+                _client.delete_collection(_settings.collection_name)
+                col = _client.get_or_create_collection(
+                    _settings.collection_name,
+                    metadata={"hnsw:space": "cosine"},
+                )
+            col.upsert(
+                ids=[c.chunk_id for c in chunks],
+                embeddings=embs,
+                documents=[c.text for c in chunks],
+                metadatas=[_flat_meta(c) for c in chunks],
+            )
+        else:
+            raise
+    append_to_bm25(chunks)
     return len(chunks)
+
+
+def append_to_bm25(new_chunks: list[Chunk]) -> None:
+    """Incrementally update BM25 corpus and metadata index with new chunks (avoiding full collection scans)."""
+    global _bm25, _bm25_corpus, _bm25_ids, _meta_index
+    if not new_chunks:
+        return
+    if _bm25 is None:
+        rebuild_index()
+        return
+
+    for c in new_chunks:
+        _bm25_ids.append(c.chunk_id)
+        _bm25_corpus.append(c.text)
+        _meta_index[c.chunk_id] = _flat_meta(c)
+
+    tokenized = [t.split() for t in _bm25_corpus]
+    _bm25 = BM25Okapi(tokenized) if tokenized else None
 
 
 def rebuild_index() -> None:
@@ -166,7 +205,7 @@ def dense_search(
     out = [(cid, 1.0 - dist) for cid, dist in zip(res["ids"][0], res["distances"][0])]
     filtered = _filter_roles(out, allowed_roles)
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[36m⏱️ [PERF] Dense search for '{query[:30]}...' took {dt:.1f}ms | Raw hits: {len(out)} -> Filtered: {len(filtered)}\033[0m", flush=True)
+    logger.debug("Dense search for '%s' took %.1fms | raw=%d -> filtered=%d", query[:30], dt, len(out), len(filtered))
     return filtered
 
 
@@ -182,7 +221,7 @@ def hybrid_search(
     t_bm25 = time.time()
     bm25 = _filter_roles(bm25_search(query, _settings.bm25_k), allowed_roles)
     dt_bm25 = (time.time() - t_bm25) * 1000.0
-    print(f"\033[36m⏱️ [PERF] BM25 search took {dt_bm25:.1f}ms | Hits: {len(bm25)}\033[0m", flush=True)
+    logger.debug("BM25 search took %.1fms | hits=%d", dt_bm25, len(bm25))
 
     k = 60
     scores: dict[str, float] = {}
@@ -194,7 +233,7 @@ def hybrid_search(
         scores = {cid: 0.0 for cid, _ in dense}
     ranked = sorted(scores.items(), key=lambda t: -t[1])
     dt_total = (time.time() - t0) * 1000.0
-    print(f"\033[36m⏱️ [PERF] Hybrid Search total took {dt_total:.1f}ms | Results: {len(ranked)}\033[0m", flush=True)
+    logger.debug("Hybrid Search total %.1fms | results=%d", dt_total, len(ranked))
     return ranked[: _settings.final_k]
 
 
@@ -211,6 +250,28 @@ def get_chunk_text(chunk_id: str) -> Optional[str]:
 def get_meta(chunk_id: str) -> Optional[dict]:
     _ensure_index()
     return _meta_index.get(chunk_id)
+
+
+def get_chunks_for_doc(doc_id: str) -> list[tuple[str, dict, str]]:
+    """Public repository method returning all (chunk_id, metadata_dict, chunk_text) for a document.
+
+    Eliminates external direct access to private _meta_index.
+    """
+    _ensure_index()
+    chunks: list[tuple[str, dict, str]] = []
+    for cid, meta in _meta_index.items():
+        if not meta:
+            continue
+        c_doc_id = meta.get("document_id", "")
+        source_path = meta.get("source_path", "")
+        if (
+            c_doc_id == doc_id
+            or doc_id.lower() in source_path.lower()
+            or Path(source_path).name.lower() == doc_id.lower()
+        ):
+            text = get_chunk_text(cid) or ""
+            chunks.append((cid, meta, text))
+    return chunks
 
 
 FEATURED_DEMO_DOC_IDS = {

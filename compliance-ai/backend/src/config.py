@@ -4,6 +4,7 @@
 # ---------------------------------------------------------------------------
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,8 +33,22 @@ class Settings(BaseSettings):
     final_k: int = 5
 
     # Security
-    jwt_secret: str = "change-me-in-prod"
+    jwt_secret: str = "compliance-ai-secret-key-production-change-me-32b"
     jwt_expire_minutes: int = 480
+    environment: str = "development"
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str, info) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT secret must be at least 32 characters long.")
+        if info.data.get("environment") == "production" and v in {
+            "compliance-ai-secret-key-production-change-me-32b",
+            "super-secret-key",
+            "secret",
+        }:
+            raise ValueError("Insecure default JWT secret cannot be used in production.")
+        return v
 
     # Optional local cross-encoder reranker (heavy; off by default)
     local_reranker: bool = False

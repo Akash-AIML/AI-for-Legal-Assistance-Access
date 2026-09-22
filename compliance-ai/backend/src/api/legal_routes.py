@@ -1,42 +1,78 @@
 """Legal analysis API routes: X-Ray, Compare, Lawyer Brief, Obligations."""
 from __future__ import annotations
 
+from datetime import date
+
+import anyio
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from auth import get_current_user, get_optional_user
 from ingestion import store
 from legal_engine import analyze_document, compare_documents, generate_lawyer_brief
-from models import RetrievedEvidence
+from memory import store as memory_store
+from models import AuthorityType, DocMetadata, DocStatus, RetrievedEvidence
 
 router = APIRouter(prefix="/api/legal", tags=["Legal Document Analysis"])
 
 
-def _chunks_for_doc(document_id: str) -> list[RetrievedEvidence]:
-    """Retrieve all chunks belonging to a document."""
+class AnalyzeRequest(BaseModel):
+    document_id: str
+    language: str = "en"
+
+
+class CompareRequest(BaseModel):
+    document_a: str
+    document_b: str
+
+
+class BriefRequest(BaseModel):
+    document_id: str
+
+
+class ObligationsRequest(BaseModel):
+    document_id: str
+
+
+# In-memory object cache for raw result models
+_xray_obj_cache: dict[str, any] = {}
+
+
+def _chunks_for_doc(document_id: str, user: dict | None = None) -> list[RetrievedEvidence]:
+    """Retrieve all chunks belonging to a document with multi-tenant ownership check."""
+    raw_chunks = store.get_chunks_for_doc(document_id)
     chunks = []
-    for cid, meta in store._meta_index.items():
-        if meta.get("document_id") == document_id:
-            text = store.get_chunk_text(cid) or ""
-            chunks.append(
-                RetrievedEvidence(
-                    chunk_id=cid,
-                    doc_id=document_id,
-                    section=meta.get("section", "Body"),
-                    text=text,
-                    metadata=store._flat_to_meta_external(meta) if hasattr(store, '_flat_to_meta_external') else _flat_to_meta(meta),
-                    fusion_score=0.0,
-                )
+    doc_owner = None
+    for cid, meta, text in raw_chunks:
+        if doc_owner is None:
+            doc_owner = meta.get("owner")
+        chunks.append(
+            RetrievedEvidence(
+                chunk_id=cid,
+                doc_id=document_id,
+                section=meta.get("section", "Body"),
+                text=text,
+                metadata=store._flat_to_meta_external(meta) if hasattr(store, '_flat_to_meta_external') else _flat_to_meta(meta),
+                fusion_score=0.0,
             )
+        )
+
+    # Multi-tenant document privacy: verify that the requesting user owns the document or has elevated role
+    if chunks and doc_owner and doc_owner not in ("global", "demo", "public_user", None):
+        if not user or not user.get("username"):
+            raise HTTPException(403, "Access denied: Authentication required to access private document.")
+        current_username = user.get("username")
+        is_elevated = user.get("role") in ("Admin", "Legal Aid Advisor")
+        if not is_elevated and current_username != doc_owner:
+            raise HTTPException(403, "Access denied: You do not have permission to access this document.")
+
     # Sort by section index for coherent analysis
     chunks.sort(key=lambda e: e.section)
     return chunks
 
 
-def _flat_to_meta(flat: dict):
-    """Convert flat metadata dict to DocMetadata (local copy to avoid circular import issues)."""
-    from models import DocMetadata, DocStatus
-    from datetime import date
-
+def _flat_to_meta(flat: dict) -> DocMetadata:
+    """Convert flat metadata dict to DocMetadata."""
     m = DocMetadata(
         document_id=flat.get("document_id", ""),
         title=flat.get("title", ""),
@@ -66,29 +102,33 @@ def _flat_to_meta(flat: dict):
     m.citation = flat.get("citation", "")
     authority_type = flat.get("authority_type", "USER_DOCUMENT")
     try:
-        from models import AuthorityType
         m.authority_type = AuthorityType(authority_type)
     except ValueError:
         pass
     return m
 
 
-@router.post("/analyze")
-@router.post("/xray")
-def analyze(payload: dict, user: dict = Depends(get_optional_user)):
+@router.post("/analyze", operation_id="analyze_document_xray", description="Run Document X-Ray analysis on an indexed document.")
+@router.post("/xray", operation_id="xray_document_alias", description="Alias for Document X-Ray analysis.")
+async def analyze(body: AnalyzeRequest, user: dict = Depends(get_optional_user)) -> dict:
     """Run Document X-Ray analysis on an indexed document."""
-    document_id = payload.get("document_id", "").strip()
+    document_id = body.document_id.strip()
     if not document_id:
         raise HTTPException(400, "document_id is required")
 
-    chunks = _chunks_for_doc(document_id)
+    chunks = _chunks_for_doc(document_id, user=user)
     if not chunks:
         raise HTTPException(404, f"Document {document_id} not found in index")
 
-    title = chunks[0].metadata.title if chunks else document_id
-    result = analyze_document(document_id, title, chunks)
+    # Return cached X-Ray result from persistent SQLite store if available (checked only after permission validation)
+    cached_xray = memory_store.get_xray_cache(document_id, language=body.language)
+    if cached_xray:
+        return cached_xray
 
-    return {
+    title = chunks[0].metadata.title if chunks else document_id
+    result = await anyio.to_thread.run_sync(analyze_document, document_id, title, chunks, body.language)
+
+    resp_data = {
         "document_id": result.document_id,
         "title": result.title,
         "overall_risk": result.overall_risk.value,
@@ -120,20 +160,25 @@ def analyze(payload: dict, user: dict = Depends(get_optional_user)):
         "lawyer_questions": result.lawyer_questions,
     }
 
+    # Persist in SQLite cache and in-memory object cache
+    memory_store.set_xray_cache(document_id, resp_data, language=body.language)
+    _xray_obj_cache[document_id] = result
+    return resp_data
 
-@router.post("/compare")
-def compare(payload: dict, user: dict = Depends(get_optional_user)):
+
+@router.post("/compare", operation_id="compare_legal_documents", description="Compare two indexed documents clause by clause.")
+async def compare(body: CompareRequest, user: dict = Depends(get_optional_user)) -> dict:
     """Compare two indexed documents clause by clause."""
-    doc_a_id = payload.get("document_a", "").strip()
-    doc_b_id = payload.get("document_b", "").strip()
+    doc_a_id = body.document_a.strip()
+    doc_b_id = body.document_b.strip()
 
     if not doc_a_id or not doc_b_id:
         raise HTTPException(400, "Both document_a and document_b are required")
     if doc_a_id == doc_b_id:
         raise HTTPException(400, "Cannot compare a document with itself")
 
-    chunks_a = _chunks_for_doc(doc_a_id)
-    chunks_b = _chunks_for_doc(doc_b_id)
+    chunks_a = _chunks_for_doc(doc_a_id, user=user)
+    chunks_b = _chunks_for_doc(doc_b_id, user=user)
 
     if not chunks_a:
         raise HTTPException(404, f"Document {doc_a_id} not found in index")
@@ -143,7 +188,7 @@ def compare(payload: dict, user: dict = Depends(get_optional_user)):
     title_a = chunks_a[0].metadata.title if chunks_a else doc_a_id
     title_b = chunks_b[0].metadata.title if chunks_b else doc_b_id
 
-    result = compare_documents(doc_a_id, title_a, chunks_a, doc_b_id, title_b, chunks_b)
+    result = await anyio.to_thread.run_sync(compare_documents, doc_a_id, title_a, chunks_a, doc_b_id, title_b, chunks_b)
 
     return {
         "document_a_id": result.document_a_id,
@@ -164,24 +209,28 @@ def compare(payload: dict, user: dict = Depends(get_optional_user)):
     }
 
 
-@router.post("/lawyer-brief")
-def lawyer_brief(payload: dict, user: dict = Depends(get_optional_user)):
+@router.post("/lawyer-brief", operation_id="generate_lawyer_brief", description="Generate a pre-consultation lawyer brief for a document.")
+async def lawyer_brief(body: BriefRequest, user: dict = Depends(get_optional_user)) -> dict:
     """Generate a pre-consultation lawyer brief for a document."""
-    document_id = payload.get("document_id", "").strip()
+    document_id = body.document_id.strip()
     if not document_id:
         raise HTTPException(400, "document_id is required")
 
-    chunks = _chunks_for_doc(document_id)
+    chunks = _chunks_for_doc(document_id, user=user)
     if not chunks:
         raise HTTPException(404, f"Document {document_id} not found in index")
 
     title = chunks[0].metadata.title if chunks else document_id
 
-    # First run X-Ray analysis
-    xray = analyze_document(document_id, title, chunks)
+    # Reuse cached X-Ray if available to save redundant LLM call
+    if document_id in _xray_obj_cache:
+        xray = _xray_obj_cache[document_id]
+    else:
+        xray = await anyio.to_thread.run_sync(analyze_document, document_id, title, chunks)
+        _xray_obj_cache[document_id] = xray
 
-    # Then generate the lawyer brief from the X-Ray
-    brief = generate_lawyer_brief(document_id, title, xray)
+    # Generate the lawyer brief
+    brief = await anyio.to_thread.run_sync(generate_lawyer_brief, document_id, title, xray)
 
     return {
         "document_id": brief.document_id,
@@ -193,19 +242,29 @@ def lawyer_brief(payload: dict, user: dict = Depends(get_optional_user)):
     }
 
 
-@router.post("/obligations")
-def obligations(payload: dict, user: dict = Depends(get_optional_user)):
+@router.post("/obligations", operation_id="extract_document_obligations", description="Extract obligations and deadlines from a document.")
+async def obligations(body: ObligationsRequest, user: dict = Depends(get_optional_user)) -> dict:
     """Extract obligations and deadlines from a document."""
-    document_id = payload.get("document_id", "").strip()
+    document_id = body.document_id.strip()
     if not document_id:
         raise HTTPException(400, "document_id is required")
 
-    chunks = _chunks_for_doc(document_id)
+    # Reuse cached X-Ray obligations if available from SQLite
+    cached = memory_store.get_xray_cache(document_id)
+    if cached:
+        return {
+            "document_id": document_id,
+            "title": cached.get("title", document_id),
+            "obligations": cached.get("obligations", []),
+        }
+
+    chunks = _chunks_for_doc(document_id, user=user)
     if not chunks:
         raise HTTPException(404, f"Document {document_id} not found in index")
 
     title = chunks[0].metadata.title if chunks else document_id
-    xray = analyze_document(document_id, title, chunks)
+    xray = await anyio.to_thread.run_sync(analyze_document, document_id, title, chunks)
+    _xray_obj_cache[document_id] = xray
 
     return {
         "document_id": document_id,
@@ -224,8 +283,11 @@ def obligations(payload: dict, user: dict = Depends(get_optional_user)):
     }
 
 
-@router.get("/documents")
-def list_analyzable(user: dict = Depends(get_optional_user)):
+@router.get("/documents", operation_id="list_analyzable_documents", description="List all documents available for analysis.")
+def list_analyzable(user: dict = Depends(get_optional_user)) -> dict:
     """List all documents available for analysis."""
-    docs = store.list_documents()
+    username = user.get("username") if user else None
+    docs = store.list_documents(owner=username)
     return {"documents": docs}
+
+

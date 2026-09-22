@@ -3,18 +3,27 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from auth import get_current_user
 from llm import synthesize_speech, transcribe_audio
 
-router = APIRouter(prefix="/api/speech", tags=["speech"])
+router = APIRouter(prefix="/api/speech", tags=["Speech & Voice"])
+
+MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-@router.post("/transcribe")
-async def transcribe(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+class TTSRequest(BaseModel):
+    text: str
+
+
+@router.post("/transcribe", operation_id="transcribe_audio", description="Transcribe an audio file using OpenAI Whisper.")
+async def transcribe(file: UploadFile = File(...), user: dict = Depends(get_current_user)) -> dict:
     data = await file.read()
     if not data:
         raise HTTPException(400, "empty audio")
+    if len(data) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, f"Audio file too large. Maximum size is {MAX_AUDIO_BYTES // (1024 * 1024)} MB.")
     try:
         mime = file.content_type or "audio/webm"
         text = transcribe_audio(data, file.filename or "audio.webm", mime)
@@ -27,9 +36,9 @@ async def transcribe(file: UploadFile = File(...), user: dict = Depends(get_curr
         raise HTTPException(500, f"Transcription failed: {e}") from e
 
 
-@router.post("/tts")
-async def tts(payload: dict, user: dict = Depends(get_current_user)):
-    text = payload.get("text", "").strip()
+@router.post("/tts", operation_id="synthesize_speech_audio", description="Synthesize text to speech audio bytes.")
+async def tts(body: TTSRequest, user: dict = Depends(get_current_user)) -> Response:
+    text = body.text.strip()
     if not text:
         raise HTTPException(400, "empty text parameter")
     try:

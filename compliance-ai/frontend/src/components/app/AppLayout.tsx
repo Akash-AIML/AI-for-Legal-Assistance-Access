@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, LogOut, Upload, Search, GitCompare, FileSearch, MessageCircle, Sun, Moon, Menu, X, FileText, CheckCircle2 } from "lucide-react"
+import { Shield, LogOut, Upload, Search, GitCompare, FileSearch, MessageCircle, Sun, Moon, Menu, X, FileText, CheckCircle2, BookOpen } from "lucide-react"
 import { useNavigate, useLocation, Link } from "react-router-dom"
 import { api, clearToken, type DocumentInfo, type User } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -17,8 +17,9 @@ import { ContractCompare } from "./ContractCompare"
 import { LawyerBrief } from "./LawyerBrief"
 import { LegalChat } from "./LegalChat"
 import { UploadView } from "./UploadView"
+import { LegalGlossary } from "./LegalGlossary"
 
-type View = "upload" | "xray" | "compare" | "brief" | "chat"
+type View = "upload" | "xray" | "compare" | "brief" | "chat" | "glossary"
 
 const navItems: { id: View; label: string; icon: React.ReactNode; href: string }[] = [
   { id: "upload", label: "Upload & Analyze", icon: <Upload className="h-4 w-4" />, href: "/app/upload" },
@@ -26,6 +27,7 @@ const navItems: { id: View; label: string; icon: React.ReactNode; href: string }
   { id: "compare", label: "Contract Compare", icon: <GitCompare className="h-4 w-4" />, href: "/app/compare" },
   { id: "brief", label: "Lawyer Brief", icon: <FileSearch className="h-4 w-4" />, href: "/app/brief" },
   { id: "chat", label: "Legal Q&A", icon: <MessageCircle className="h-4 w-4" />, href: "/app/chat" },
+  { id: "glossary", label: "Legal Glossary", icon: <BookOpen className="h-4 w-4" />, href: "/app/glossary" },
 ]
 
 export function AppLayout() {
@@ -60,6 +62,44 @@ export function AppLayout() {
     }
   }
 
+  // Focus management & Escape key listener for accessible mobile menu dialog
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const timer = setTimeout(() => {
+        const firstLink = document.querySelector<HTMLElement>("[role='dialog'] a")
+        firstLink?.focus()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!mobileMenuOpen) return
+      if (e.key === "Escape") {
+        setMobileMenuOpen(false)
+        return
+      }
+      if (e.key === "Tab") {
+        const dialog = document.querySelector<HTMLElement>("[role='dialog']")
+        if (!dialog) return
+        const focusable = dialog.querySelectorAll<HTMLElement>("a, button, [tabindex='0']")
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [mobileMenuOpen])
+
   function handleLogout() {
     clearToken()
     setUser(null)
@@ -72,6 +112,13 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      {/* Skip navigation for keyboard / screen reader users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+      >
+        Skip to main content
+      </a>
       {/* Permanent Left Sidebar on Desktop */}
       <aside className="hidden md:flex h-full w-64 shrink-0 flex-col border-r border-border/80 bg-card">
         {/* Sidebar Brand Header */}
@@ -91,13 +138,14 @@ export function AppLayout() {
 
         {/* Sidebar Navigation Menu */}
         <ScrollArea className="flex-1 py-4">
-          <nav className="px-3 space-y-1">
+          <nav className="px-3 space-y-1" aria-label="Main Navigation">
             {navItems.map((item) => {
               const isActive = currentView === item.id
               return (
                 <Link
                   key={item.id}
                   to={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
                     isActive
                       ? "bg-secondary text-foreground font-bold shadow-sm border-l-2 border-primary"
@@ -160,14 +208,14 @@ export function AppLayout() {
             {/* Dark/Light Switcher */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/60 bg-card/60">
               <Sun className={`h-3.5 w-3.5 ${theme === "light" ? "text-amber-500" : "text-muted-foreground"}`} />
-              <Switch checked={theme === "dark"} onCheckedChange={toggle} className="scale-75" />
+              <Switch checked={theme === "dark"} onCheckedChange={toggle} aria-label="Toggle dark mode" className="scale-75" />
               <Moon className={`h-3.5 w-3.5 ${theme === "dark" ? "text-blue-400" : "text-muted-foreground"}`} />
             </div>
 
             {/* User Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-9 px-3 gap-2 rounded-xl border-border/80 hover:bg-accent/60">
+                <Button variant="outline" aria-label="User account menu" className="h-9 px-3 gap-2 rounded-xl border-border/80 hover:bg-accent/60">
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`} alt={user.name} />
                     <AvatarFallback className="bg-primary/20 text-primary font-bold text-[10px]">{user.name?.charAt(0) || "U"}</AvatarFallback>
@@ -198,6 +246,9 @@ export function AppLayout() {
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile navigation menu"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -225,7 +276,7 @@ export function AppLayout() {
         </AnimatePresence>
 
         {/* View Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -240,6 +291,7 @@ export function AppLayout() {
               {currentView === "compare" && <ContractCompare documents={documents} />}
               {currentView === "brief" && <LawyerBrief documents={documents} />}
               {currentView === "chat" && <LegalChat />}
+              {currentView === "glossary" && <LegalGlossary />}
             </motion.div>
           </AnimatePresence>
         </main>

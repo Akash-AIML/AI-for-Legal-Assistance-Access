@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +15,7 @@ from models import Decision, Escalation, RetrievedEvidence
 from retrieval.evidence import detect_restricted, retrieve_evidence, understand_query
 
 _settings = get_settings()
+logger = logging.getLogger(__name__)
 
 SYSTEM_GROUNDED = (
     "You are a legal document analysis assistant. Answer using ONLY the provided "
@@ -27,13 +30,12 @@ SYSTEM_GROUNDED = (
 )
 
 
-import time
 
 def node_understand(state: GraphState) -> dict:
     t0 = time.time()
     understood = understand_query(state["question"], state["frame"])
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[95m⏱️ [PERF] Node 'understand' executed in {dt:.1f}ms\033[0m", flush=True)
+    logger.debug("Node 'understand' executed in %.1fms", dt)
     return {"understood": understood}
 
 
@@ -42,7 +44,7 @@ def node_retrieve(state: GraphState) -> dict:
     evidence = retrieve_evidence(state["question"], state.get("understood", {}), state["frame"])
     restricted = detect_restricted(state["question"], state["frame"])
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[95m⏱️ [PERF] Node 'retrieve' executed in {dt:.1f}ms | Evidence count: {len(evidence)} | Restricted: {restricted}\033[0m", flush=True)
+    logger.debug("Node 'retrieve' executed in %.1fms | evidence=%d | restricted=%s", dt, len(evidence), restricted)
     return {"evidence": evidence, "restricted": restricted}
 
 
@@ -53,7 +55,7 @@ def node_assess(state: GraphState) -> dict:
         state.get("evidence", []), restricted=state.get("restricted", False)
     )
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[95m⏱️ [PERF] Node 'assess' executed in {dt:.1f}ms | Status: {assessment.status.value if assessment else 'N/A'}\033[0m", flush=True)
+    logger.debug("Node 'assess' executed in %.1fms | status=%s", dt, assessment.status.value if assessment else "N/A")
     return {"assessment": assessment}
 
 
@@ -62,7 +64,7 @@ def node_decide(state: GraphState) -> dict:
     assessment = state["assessment"]
     decision = assessment.decision if assessment else Decision.CLARIFY
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[95m⏱️ [PERF] Node 'decide' executed in {dt:.1f}ms | Decision: {decision.value if hasattr(decision, 'value') else decision}\033[0m", flush=True)
+    logger.debug("Node 'decide' executed in %.1fms | decision=%s", dt, decision.value if hasattr(decision, "value") else decision)
     return {"decision": decision}
 
 
@@ -124,7 +126,7 @@ def node_generate(state: GraphState) -> dict:
             max_tokens=300,
         )
     dt = (time.time() - t0) * 1000.0
-    print(f"\033[95m⏱️ [PERF] Node 'generate' executed in {dt:.1f}ms\033[0m", flush=True)
+    logger.debug("Node 'generate' executed in %.1fms", dt)
     return {"answer": answer, "citations": _citations(evidence)}
 
 
