@@ -7,21 +7,11 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/",
-      "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "header", "key": "accept", "value": "(?i).*text/markdown.*" }],
-      "destination": "/api/index.py"
-    },
-    {
       "source": "/(about|contact|privacy|docs)",
       "destination": "/$1.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
