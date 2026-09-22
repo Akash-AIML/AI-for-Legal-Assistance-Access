@@ -160,11 +160,11 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
             </ScrollReveal>
 
             {/* Key Clauses */}
-            {result.key_clauses.length > 0 && (
+            {(result.key_clauses?.length ?? 0) > 0 && (
               <ScrollReveal delay={0.05}>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-xl">Key Clauses to Discuss</CardTitle>
+                    <CardTitle className="text-xl">Key Clauses Identified</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <StaggerContainer staggerDelay={0.05}>
@@ -186,7 +186,7 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
             )}
 
             {/* Risk Areas */}
-            {result.risk_areas.length > 0 && (
+            {(result.risk_areas?.length ?? 0) > 0 && (
               <ScrollReveal delay={0.1}>
                 <Card>
                   <CardHeader>
@@ -214,30 +214,32 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
             )}
 
             {/* Recommended Questions */}
-            <ScrollReveal delay={0.15}>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl">Recommended Questions for Your Lawyer</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <StaggerContainer staggerDelay={0.03}>
-                    {result.recommended_questions.map((q, i) => (
-                      <StaggerItem key={i} direction="up">
-                        <motion.div className="flex items-start gap-3 rounded-xl border p-3">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <HelpCircle className="h-3 w-3" />
-                          </div>
-                          <p className="text-sm text-foreground">{q}</p>
-                        </motion.div>
-                      </StaggerItem>
-                    ))}
-                  </StaggerContainer>
-                </CardContent>
-              </Card>
-            </ScrollReveal>
+            {(result.recommended_questions?.length ?? 0) > 0 && (
+              <ScrollReveal delay={0.15}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl">Recommended Questions for Your Lawyer</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <StaggerContainer staggerDelay={0.03}>
+                      {result.recommended_questions.map((q, i) => (
+                        <StaggerItem key={i} direction="up">
+                          <motion.div className="flex items-start gap-3 rounded-xl border p-3">
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <HelpCircle className="h-3 w-3" />
+                            </div>
+                            <p className="text-sm text-foreground">{q}</p>
+                          </motion.div>
+                        </StaggerItem>
+                      ))}
+                    </StaggerContainer>
+                  </CardContent>
+                </Card>
+              </ScrollReveal>
+            )}
 
             {/* Information to Gather */}
-            {result.information_to_gather.length > 0 && (
+            {(result.information_to_gather?.length ?? 0) > 0 && (
               <ScrollReveal delay={0.2}>
                 <Card>
                   <CardHeader>

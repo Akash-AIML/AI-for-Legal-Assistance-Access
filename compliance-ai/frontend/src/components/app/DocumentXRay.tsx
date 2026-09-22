@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { ScrollReveal, StaggerContainer, StaggerItem } from "@/components/landing/animated"
-import { LEGAL_GLOSSARY } from "./LegalGlossary"
+import { LEGAL_GLOSSARY, type GlossaryTerm } from "./legalGlossaryData"
 import { cn } from "@/lib/utils"
 
 const SEVERITY_CONFIG: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
@@ -235,7 +235,7 @@ export function DocumentXRay({ documents }: DocumentXRayProps) {
                                   {(() => {
                                     const label = CLAUSE_LABELS[f.clause_type] || f.clause_type
                                     const glossaryMatch = LEGAL_GLOSSARY.find(
-                                      (g) =>
+                                      (g: GlossaryTerm) =>
                                         g.term.toLowerCase().includes(label.toLowerCase()) ||
                                         label.toLowerCase().includes(g.term.toLowerCase()) ||
                                         f.title.toLowerCase().includes(g.term.toLowerCase())

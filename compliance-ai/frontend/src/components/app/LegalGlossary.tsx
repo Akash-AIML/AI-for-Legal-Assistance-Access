@@ -6,78 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-
-export interface GlossaryTerm {
-  term: string
-  plainEnglish: string
-  whyItMatters: string
-  category: "Risk" | "Obligation" | "Standard" | "Financial"
-}
-
-export const LEGAL_GLOSSARY: GlossaryTerm[] = [
-  {
-    term: "Indemnification",
-    plainEnglish: "An agreement where one party promises to compensate and cover legal fees or damages suffered by the other party.",
-    whyItMatters: "High risk: You could be forced to pay thousands in legal costs even if you were only partly at fault.",
-    category: "Risk",
-  },
-  {
-    term: "Limitation of Liability",
-    plainEnglish: "A clause that sets a maximum dollar cap on the amount of damages one party can recover from the other in a dispute.",
-    whyItMatters: "Protective for providers, but can severely limit your financial recovery if you suffer significant losses.",
-    category: "Risk",
-  },
-  {
-    term: "Liquidated Damages",
-    plainEnglish: "A predetermined, fixed sum of money specified in the contract that must be paid if a specific breach occurs.",
-    whyItMatters: "Avoids court estimation of damages, but can be punitive if the set sum is disproportionate to actual harm.",
-    category: "Financial",
-  },
-  {
-    term: "Severability",
-    plainEnglish: "Ensures that if one clause is found invalid or unenforceable by a court, the remainder of the agreement remains valid.",
-    whyItMatters: "Prevents an entire agreement from being cancelled because of a single flawed paragraph.",
-    category: "Standard",
-  },
-  {
-    term: "Governing Law & Jurisdiction",
-    plainEnglish: "Specifies which state's or country's laws control the agreement and which court has authority to resolve disputes.",
-    whyItMatters: "Could force you to travel to another state or country to defend yourself in court.",
-    category: "Standard",
-  },
-  {
-    term: "Non-Compete Clause",
-    plainEnglish: "Restricts you from working for competitors or starting a similar competing business for a specified duration and geography.",
-    whyItMatters: "High risk for employees and freelancers: Can prevent you from earning a livelihood after leaving.",
-    category: "Risk",
-  },
-  {
-    term: "Force Majeure",
-    plainEnglish: "Frees parties from liability or contractual obligations when an extraordinary event beyond control occurs (e.g. natural disasters, war).",
-    whyItMatters: "Protects against breaches caused by unforeseen catastrophes, but must explicitly list the qualifying events.",
-    category: "Standard",
-  },
-  {
-    term: "Automatic Renewal (Evergreen)",
-    plainEnglish: "A provision where the contract automatically renews for another term unless written cancellation is provided within a specific window.",
-    whyItMatters: "Can lock you into unwanted contracts and payments if you miss the narrow cancellation deadline.",
-    category: "Obligation",
-  },
-  {
-    term: "Arbitration Clause",
-    plainEnglish: "Mandates that disputes be resolved by a private arbitrator rather than through a public judge and jury court trial.",
-    whyItMatters: "Waives your right to a court trial and appeal; arbitration proceedings are often confidential and costly.",
-    category: "Risk",
-  },
-  {
-    term: "Notice Period",
-    plainEnglish: "The minimum amount of advance warning (e.g., 30 or 60 days) required before terminating or modifying an agreement.",
-    whyItMatters: "Missing a notice deadline can automatically renew an agreement or trigger unexpected penalties.",
-    category: "Obligation",
-  },
-]
-
-const CATEGORIES = ["All", "Risk", "Obligation", "Financial", "Standard"] as const
+import { CATEGORIES, LEGAL_GLOSSARY, type GlossaryTerm } from "./legalGlossaryData"
 
 export function LegalGlossary() {
   const [query, setQuery] = useState("")
@@ -134,6 +63,8 @@ export function LegalGlossary() {
               variant={selectedCategory === cat ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedCategory(cat)}
+              aria-pressed={selectedCategory === cat}
+              aria-label={`Filter by ${cat}`}
               className="h-7 text-xs px-2.5 rounded-lg"
             >
               {cat}
@@ -143,25 +74,32 @@ export function LegalGlossary() {
       </CardHeader>
       <CardContent className="space-y-3">
         {filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">No matching legal terms found.</p>
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            No matching legal terms found. Try a different keyword or filter.
+          </div>
         ) : (
-          filtered.map((item) => (
-            <div
-              key={item.term}
-              className="p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-primary/40 transition-colors space-y-1.5"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-sm text-foreground">{item.term}</span>
-                {getCategoryBadge(item.category)}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {filtered.map((item) => (
+              <div
+                key={item.term}
+                className="p-3.5 rounded-xl border border-border/70 bg-card/50 hover:bg-card/80 transition-colors flex flex-col justify-between gap-2 shadow-xs"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <h3 className="font-semibold text-sm text-foreground">{item.term}</h3>
+                    {getCategoryBadge(item.category)}
+                  </div>
+                  <p className="text-xs text-foreground/90 leading-relaxed font-sans">
+                    {item.plainEnglish}
+                  </p>
+                </div>
+                <div className="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded-lg border border-border/40">
+                  <span className="font-semibold text-primary/90">Why it matters: </span>
+                  {item.whyItMatters}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <strong className="text-foreground">In Plain English:</strong> {item.plainEnglish}
-              </p>
-              <p className="text-xs text-primary/90 font-medium leading-relaxed">
-                <strong className="text-foreground">Why It Matters:</strong> {item.whyItMatters}
-              </p>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

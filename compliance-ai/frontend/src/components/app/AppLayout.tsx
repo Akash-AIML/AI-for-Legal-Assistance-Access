@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, LogOut, Upload, Search, GitCompare, FileSearch, MessageCircle, Sun, Moon, Menu, X, FileText, CheckCircle2, BookOpen } from "lucide-react"
+import { Shield, LogOut, Upload, Search, GitCompare, FileSearch, MessageCircle, Sun, Moon, Menu, X, FileText, CheckCircle2, BookOpen, Loader2 } from "lucide-react"
 import { useNavigate, useLocation, Link } from "react-router-dom"
 import { api, clearToken, type DocumentInfo, type User } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -12,12 +12,13 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useTheme } from "@/hooks"
-import { DocumentXRay } from "./DocumentXRay"
-import { ContractCompare } from "./ContractCompare"
-import { LawyerBrief } from "./LawyerBrief"
-import { LegalChat } from "./LegalChat"
-import { UploadView } from "./UploadView"
-import { LegalGlossary } from "./LegalGlossary"
+
+const DocumentXRay = lazy(() => import("./DocumentXRay").then((m) => ({ default: m.DocumentXRay })))
+const ContractCompare = lazy(() => import("./ContractCompare").then((m) => ({ default: m.ContractCompare })))
+const LawyerBrief = lazy(() => import("./LawyerBrief").then((m) => ({ default: m.LawyerBrief })))
+const LegalChat = lazy(() => import("./LegalChat").then((m) => ({ default: m.LegalChat })))
+const UploadView = lazy(() => import("./UploadView").then((m) => ({ default: m.UploadView })))
+const LegalGlossary = lazy(() => import("./LegalGlossary").then((m) => ({ default: m.LegalGlossary })))
 
 type View = "upload" | "xray" | "compare" | "brief" | "chat" | "glossary"
 
@@ -286,12 +287,20 @@ export function AppLayout() {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="max-w-6xl mx-auto"
             >
-              {currentView === "upload" && <UploadView onUploadComplete={loadDocuments} />}
-              {currentView === "xray" && <DocumentXRay documents={documents} />}
-              {currentView === "compare" && <ContractCompare documents={documents} />}
-              {currentView === "brief" && <LawyerBrief documents={documents} />}
-              {currentView === "chat" && <LegalChat />}
-              {currentView === "glossary" && <LegalGlossary />}
+              <Suspense
+                fallback={
+                  <div className="flex h-64 items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                }
+              >
+                {currentView === "upload" && <UploadView onUploadComplete={loadDocuments} />}
+                {currentView === "xray" && <DocumentXRay documents={documents} />}
+                {currentView === "compare" && <ContractCompare documents={documents} />}
+                {currentView === "brief" && <LawyerBrief documents={documents} />}
+                {currentView === "chat" && <LegalChat />}
+                {currentView === "glossary" && <LegalGlossary />}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

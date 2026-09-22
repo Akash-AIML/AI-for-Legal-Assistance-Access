@@ -64,30 +64,42 @@ const SUGGESTIONS = [
 ]
 
 export function LegalChat() {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [showHistory, setShowHistory] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  // Load chat sessions history from localStorage on mount
-  useEffect(() => {
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  })
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed: ChatSession[] = JSON.parse(stored)
-        setSessions(parsed)
-        if (parsed.length > 0) {
-          setActiveSessionId(parsed[0].id)
-          setMessages(parsed[0].messages || [])
-        }
+        return parsed.length > 0 ? parsed[0].id : null
       }
     } catch {
-      /* ignore */
+      return null
     }
-  }, [])
+    return null
+  })
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed: ChatSession[] = JSON.parse(stored)
+        return parsed.length > 0 ? parsed[0].messages || [] : []
+      }
+    } catch {
+      return []
+    }
+    return []
+  })
+  const [input, setInput] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Sync sessions state to localStorage
   const saveSessions = useCallback((updatedSessions: ChatSession[]) => {

@@ -6,7 +6,36 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/react-router") ||
+            id.includes("node_modules/framer-motion")
+          ) {
+            return "vendor-react"
+          }
+          if (id.includes("node_modules/@radix-ui")) {
+            return "vendor-ui"
+          }
+          if (id.includes("node_modules/lucide-react")) {
+            return "vendor-icons"
+          }
+          if (id.includes("node_modules/jspdf")) {
+            return "vendor-pdf"
+          }
+          if (id.includes("node_modules/marked")) {
+            return "vendor-markdown"
+          }
+        },
+      },
     },
   },
   server: {
