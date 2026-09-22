@@ -1,0 +1,7 @@
+{
+  "name": "ai-for-legal-assistance-access",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd compliance-ai/frontend && npm install && npm run build"
+  }
+}

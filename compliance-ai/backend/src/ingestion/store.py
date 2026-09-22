@@ -33,7 +33,15 @@ def get_collection():
     global _client
     with _client_lock:
         if _client is None:
-            _client = chromadb.PersistentClient(path=_settings.chroma_dir)
+            try:
+                _client = chromadb.PersistentClient(path=_settings.chroma_dir)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to initialize PersistentClient at %s (%s). Falling back to EphemeralClient.",
+                    _settings.chroma_dir,
+                    exc,
+                )
+                _client = chromadb.EphemeralClient()
         return _client.get_or_create_collection(
             _settings.collection_name,
             metadata={"hnsw:space": "cosine"},
@@ -123,14 +131,17 @@ def append_to_bm25(new_chunks: list[Chunk]) -> None:
 def rebuild_index() -> None:
     """Re-read all chunks (text + metadata) and rebuild BM25 + meta indexes."""
     global _bm25, _bm25_corpus, _bm25_ids, _meta_index
-    col = get_collection()
-    data = col.get(include=["documents", "metadatas"])
-    _bm25_corpus = data.get("documents", []) or []
-    _bm25_ids = data.get("ids", []) or []
-    metas = data.get("metadatas", []) or []
-    _meta_index = {cid: m for cid, m in zip(_bm25_ids, metas) if m}
-    tokenized = [t.split() for t in _bm25_corpus]
-    _bm25 = BM25Okapi(tokenized) if tokenized else None
+    try:
+        col = get_collection()
+        data = col.get(include=["documents", "metadatas"])
+        _bm25_corpus = data.get("documents", []) or []
+        _bm25_ids = data.get("ids", []) or []
+        metas = data.get("metadatas", []) or []
+        _meta_index = {cid: m for cid, m in zip(_bm25_ids, metas) if m}
+        tokenized = [t.split() for t in _bm25_corpus]
+        _bm25 = BM25Okapi(tokenized) if tokenized else None
+    except Exception as exc:
+        logger.warning("rebuild_index encountered error: %s", exc)
 
 
 def _ensure_index() -> None:

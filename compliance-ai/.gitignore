@@ -17,6 +17,8 @@ __pycache__/
 
 # Database & Persistent Data
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 data/chroma/
 data/uploads/

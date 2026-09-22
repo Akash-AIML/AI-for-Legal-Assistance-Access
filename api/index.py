@@ -10,12 +10,12 @@ os.environ.setdefault("VERCEL", "1")
 # Locate backend/src across various deployment root structures
 current_file = Path(__file__).resolve()
 candidate_paths = [
-    current_file.parent.parent / "backend" / "src",
     current_file.parent.parent / "compliance-ai" / "backend" / "src",
-    current_file.parent / "backend" / "src",
     current_file.parent / "compliance-ai" / "backend" / "src",
-    Path("/var/task/backend/src"),
+    current_file.parent.parent / "backend" / "src",
+    current_file.parent / "backend" / "src",
     Path("/var/task/compliance-ai/backend/src"),
+    Path("/var/task/backend/src"),
 ]
 
 for p in candidate_paths:

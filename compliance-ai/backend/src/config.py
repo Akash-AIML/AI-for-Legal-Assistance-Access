@@ -2,10 +2,24 @@
 # Environment-driven configuration. All LLM/embedding calls use an
 # OpenAI-compatible base URL, so the system works with any compatible provider.
 # ---------------------------------------------------------------------------
+import os
+import tempfile
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_db_path() -> str:
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return os.path.join(tempfile.gettempdir(), "sessions.db")
+    return "./data/sessions.db"
+
+
+def _default_chroma_dir() -> str:
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return os.path.join(tempfile.gettempdir(), "chroma")
+    return "./data/chroma"
 
 
 class Settings(BaseSettings):
@@ -23,9 +37,9 @@ class Settings(BaseSettings):
     llm_offline: bool = False
 
     # Store / persistence
-    chroma_dir: str = "./data/chroma"
+    chroma_dir: str = Field(default_factory=_default_chroma_dir)
     collection_name: str = "legal_docs"
-    db_path: str = "./data/sessions.db"
+    db_path: str = Field(default_factory=_default_db_path)
 
     # Retrieval tuning
     dense_k: int = 10

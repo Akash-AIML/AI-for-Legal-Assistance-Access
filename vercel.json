@@ -1,9 +1,13 @@
 {
   "framework": "vite",
-  "outputDirectory": "frontend/dist",
+  "outputDirectory": "compliance-ai/frontend/dist",
   "functions": {
     "api/**/*.py": {
-      "includeFiles": "backend/**",
+      "includeFiles": "compliance-ai/backend/**",
+      "maxDuration": 60
+    },
+    "compliance-ai/api/**/*.py": {
+      "includeFiles": "compliance-ai/backend/**",
       "maxDuration": 60
     }
   },

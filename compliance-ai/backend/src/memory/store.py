@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import tempfile
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -19,16 +20,31 @@ def _db() -> sqlite3.Connection:
     global _conn
     with _lock:
         if _conn is None:
-            os.makedirs(os.path.dirname(_settings.db_path) or ".", exist_ok=True)
-            _conn = sqlite3.connect(_settings.db_path, check_same_thread=False)
-            _init(_conn)
+            db_file = _settings.db_path
+            try:
+                os.makedirs(os.path.dirname(db_file) or ".", exist_ok=True)
+                _conn = sqlite3.connect(db_file, check_same_thread=False)
+                _init(_conn)
+            except (OSError, sqlite3.OperationalError):
+                # Fallback to temp directory or in-memory if filesystem is read-only
+                try:
+                    fallback_file = os.path.join(tempfile.gettempdir(), "sessions.db")
+                    os.makedirs(os.path.dirname(fallback_file) or ".", exist_ok=True)
+                    _conn = sqlite3.connect(fallback_file, check_same_thread=False)
+                    _init(_conn)
+                except Exception:
+                    _conn = sqlite3.connect(":memory:", check_same_thread=False)
+                    _init(_conn)
         return _conn
 
 
 def _init(conn: sqlite3.Connection) -> None:
     # WAL mode allows concurrent readers while writing, boosting query efficiency
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+    except sqlite3.OperationalError:
+        pass
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS sessions (
