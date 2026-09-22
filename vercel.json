@@ -1,12 +1,6 @@
 {
   "buildCommand": "cd compliance-ai/frontend && npm install && npm run build",
   "outputDirectory": "compliance-ai/frontend/dist",
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "compliance-ai/backend/**",
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
