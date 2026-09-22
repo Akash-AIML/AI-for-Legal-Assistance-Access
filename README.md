@@ -6,6 +6,16 @@ An evidence-first, full-stack AI legal intelligence platform engineered to democ
 - **API Documentation (OpenAPI / Swagger)**: `https://ai-for-legal-assistance-access-pi.vercel.app/api/docs`
 - **Agentic llms.txt Discovery**: `https://ai-for-legal-assistance-access-pi.vercel.app/llms.txt`
 
+## GenAI Services Used
+
+LegalLens uses OpenAI-compatible APIs so the provider can be configured without changing application code:
+
+- **Groq** (`https://api.groq.com/openai/v1`) is the default inference provider. Its `openai/gpt-oss-120b` model powers Document X-Ray analysis, contract comparison, lawyer briefs, Hindi responses, legal Q&A, and streamed chat responses.
+- **NVIDIA-compatible embedding endpoints** are supported for semantic document and query embeddings used by ChromaDB retrieval and RAG. When the configured provider is Groq, which does not expose embeddings, the app uses its deterministic offline embedding fallback.
+- **Whisper-compatible speech transcription** uses `whisper-large-v3-turbo` through `/api/speech/transcribe` to turn citizen voice questions into text.
+- **OpenAI-compatible text-to-speech** is exposed through `/api/speech/tts` and `/api/tts`, converting assistant answers into audio for voice-first accessibility. It tries `tts-1`, `gpt-4o-mini-tts`, and `gpt-4o-audio-preview` in order.
+- **Offline fallback mode** provides deterministic embeddings and a local responder when credentials are unavailable, allowing demos and automated tests to run without external AI calls.
+
 ---
 
 ## 🎯 Architectural Principles & Metric Optimizations
