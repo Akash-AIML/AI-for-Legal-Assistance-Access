@@ -49,10 +49,15 @@ tags_metadata = [
     },
 ]
 
+import os
+
+_is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Asynchronously initialize vector index in background thread to prevent Azure Web App 503 health probe timeouts
-    threading.Thread(target=store.rebuild_index, daemon=True).start()
+    # Asynchronously initialize vector index in background thread only in persistent environments
+    if not _is_serverless:
+        threading.Thread(target=store.rebuild_index, daemon=True).start()
     yield
 
 
@@ -79,7 +84,7 @@ Uploaded documents are treated as untrusted data. Document content is isolated f
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
-    lifespan=lifespan,
+    lifespan=None if _is_serverless else lifespan,
 )
 
 @app.exception_handler(StarletteHTTPException)
@@ -104,13 +109,27 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:8000",
     ],
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 @app.middleware("http")
 async def add_rest_headers(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        import traceback
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error_message": str(exc),
+                "error_type": type(exc).__name__,
+                "traceback": traceback.format_exc().splitlines(),
+                "path": request.url.path,
+            },
+        )
     # REST headers
     response.headers["X-RateLimit-Limit"] = "100"
     response.headers["X-RateLimit-Remaining"] = "99"
