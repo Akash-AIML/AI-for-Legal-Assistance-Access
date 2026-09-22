@@ -6,6 +6,7 @@ and cached query embeddings.
 from __future__ import annotations
 
 import functools
+import heapq
 import logging
 from pathlib import Path
 import time
@@ -25,6 +26,7 @@ _meta_index: dict[str, dict] = {}
 _bm25_corpus: list[str] = []
 _bm25_ids: list[str] = []
 _bm25_tokenized: list[list[str]] = []
+_chunk_text_index: dict[str, str] = {}
 _bm25: Optional[BM25Okapi] = None
 
 FEATURED_DEMO_DOC_IDS = {
@@ -44,7 +46,7 @@ def _get_collection():
 
 def rebuild_index() -> None:
     """Re-read all chunks (text + metadata) from vector store and rebuild BM25 + meta indexes."""
-    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized
+    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized, _chunk_text_index
     try:
         col = _get_collection()
         data = col.get(include=["documents", "metadatas"])
@@ -52,6 +54,7 @@ def rebuild_index() -> None:
         _bm25_ids = data.get("ids", []) or []
         metas = data.get("metadatas", []) or []
         _meta_index = {cid: m for cid, m in zip(_bm25_ids, metas) if m}
+        _chunk_text_index = dict(zip(_bm25_ids, _bm25_corpus))
         _bm25_tokenized = [t.split() for t in _bm25_corpus]
         _bm25 = BM25Okapi(_bm25_tokenized) if _bm25_tokenized else None
     except Exception as exc:
@@ -60,7 +63,7 @@ def rebuild_index() -> None:
 
 def append_to_bm25(new_chunks: list[Chunk]) -> None:
     """Incrementally update BM25 corpus and metadata index with new chunks in O(Delta N) time."""
-    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized
+    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized, _chunk_text_index
     if not new_chunks:
         return
     if _bm25 is None or not _bm25_tokenized:
@@ -73,6 +76,7 @@ def append_to_bm25(new_chunks: list[Chunk]) -> None:
         _bm25_ids.append(c.chunk_id)
         _bm25_corpus.append(c.text)
         _meta_index[c.chunk_id] = _flat_meta(c)
+        _chunk_text_index[c.chunk_id] = c.text
         new_tokenized.append(c.text.split())
 
     _bm25_tokenized.extend(new_tokenized)
@@ -119,13 +123,13 @@ def _get_query_embedding(query: str) -> list[float]:
 
 
 def bm25_search(query: str, k: int = _settings.bm25_k) -> list[tuple[str, float]]:
-    """Sparse keyword search via BM25Okapi."""
+    """Sparse keyword search via BM25Okapi with O(N log k) heap ranking."""
     _ensure_index()
     if _bm25 is None or not query.strip():
         return []
     scores = _bm25.get_scores(query.split())
-    ranked = sorted(zip(_bm25_ids, scores), key=lambda t: -t[1])
-    return [(cid, s) for cid, s in ranked[:k] if s > 0]
+    positive_hits = [(cid, float(s)) for cid, s in zip(_bm25_ids, scores) if s > 0]
+    return heapq.nlargest(k, positive_hits, key=lambda t: t[1])
 
 
 def dense_search(
@@ -178,14 +182,20 @@ def hybrid_search(
 
 
 def get_chunk_text(chunk_id: str) -> Optional[str]:
-    """Retrieve chunk document text by chunk_id."""
+    """Retrieve chunk document text by chunk_id in O(1) time."""
+    if chunk_id in _chunk_text_index:
+        return _chunk_text_index[chunk_id]
     if _bm25_ids:
         idx = _bm25_ids.index(chunk_id) if chunk_id in _bm25_ids else -1
         if idx != -1:
+            _chunk_text_index[chunk_id] = _bm25_corpus[idx]
             return _bm25_corpus[idx]
     col = _get_collection()
     g = col.get(ids=[chunk_id], include=["documents"])
-    return g["documents"][0] if g["ids"] else None
+    txt = g["documents"][0] if g["ids"] else None
+    if txt:
+        _chunk_text_index[chunk_id] = txt
+    return txt
 
 
 def get_meta(chunk_id: str) -> Optional[dict]:

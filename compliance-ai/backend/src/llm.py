@@ -25,15 +25,26 @@ logger = logging.getLogger(__name__)
 OFFLINE_MODE = _settings.llm_offline
 
 
+import threading
+
+_client_instance: OpenAI | None = None
+_client_lock = threading.Lock()
+
+
 def _client() -> OpenAI:
-    api_key = (
-        _settings.groq_api_key
-        or _settings.openai_api_key
-        or os.environ.get("GROQ_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or "sk-local"
-    )
-    return OpenAI(api_key=api_key, base_url=_settings.openai_base_url)
+    """Thread-safe singleton OpenAI client preserving HTTP connection pooling and Keep-Alive."""
+    global _client_instance
+    with _client_lock:
+        if _client_instance is None:
+            api_key = (
+                _settings.groq_api_key
+                or _settings.openai_api_key
+                or os.environ.get("GROQ_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+                or "sk-local"
+            )
+            _client_instance = OpenAI(api_key=api_key, base_url=_settings.openai_base_url)
+        return _client_instance
 
 
 def chat(
