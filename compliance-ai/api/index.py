@@ -1,6 +1,5 @@
 import os
 import sys
-import tempfile
 import traceback
 from pathlib import Path
 
@@ -28,15 +27,20 @@ for p in candidate_paths:
             sys.path.insert(0, str(p))
         break
 
-try:
-    from main import app
-except Exception as exc:
-    # Diagnostic fallback app to prevent FUNCTION_INVOCATION_FAILED and surface the exact issue
-    from fastapi import FastAPI
-    from fastapi.responses import JSONResponse
+# Vercel requires `app` to be declared at the top level of the module.
+# We create a placeholder first, then replace it with the real FastAPI app.
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-    app = FastAPI(title="LegalLens Deployment Diagnostic")
-    err_trace = traceback.format_exc()
+app = FastAPI(title="LegalLens AI")
+
+try:
+    # Import the real FastAPI app from the backend
+    from main import app as _real_app  # noqa: E402
+    app = _real_app
+except Exception as _exc:
+    # Diagnostic fallback: surfaces the exact error instead of a generic 500
+    _err_trace = traceback.format_exc()
 
     @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
     async def diagnostic_handler(full_path: str):
@@ -45,9 +49,9 @@ except Exception as exc:
             content={
                 "status": "error",
                 "message": "LegalLens backend failed to initialize on Vercel.",
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-                "traceback": err_trace.splitlines(),
+                "error_type": type(_exc).__name__,
+                "error_message": str(_exc),
+                "traceback": _err_trace.splitlines(),
                 "python_path": sys.path,
                 "cwd": os.getcwd(),
             },
