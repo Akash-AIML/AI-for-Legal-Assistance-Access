@@ -72,6 +72,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ document_id: documentId }),
       }),
+    sessions: () =>
+      request<{ sessions: Array<{ session_id: string; user_id: string; created_at: string; context: Record<string, unknown> }> }>("/chat/sessions"),
+    history: (sessionId: string) =>
+      request<{ session_id: string; messages: Array<{ role: "user" | "assistant"; content: string; meta?: Record<string, unknown> }> }>(`/chat/history?session_id=${encodeURIComponent(sessionId)}`),
     chat: (question: string, sessionId?: string) =>
       request<ChatResponse>("/chat", {
         method: "POST",

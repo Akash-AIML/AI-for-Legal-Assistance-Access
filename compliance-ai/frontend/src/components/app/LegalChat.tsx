@@ -119,10 +119,84 @@ export function LegalChat() {
     scrollToBottom()
   }, [messages, busy, scrollToBottom])
 
-  // Select a session from history
-  const selectSession = (session: ChatSession) => {
+  // Cloud session synchronization for authenticated users (multi-device sync)
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("legallens_token") : null
+    if (!token) return
+
+    api.legal
+      .sessions()
+      .then(async (res) => {
+        if (res?.sessions && res.sessions.length > 0) {
+          const cloudSessions: ChatSession[] = res.sessions.map((s) => ({
+            id: s.session_id,
+            title: String((s.context as Record<string, unknown>)?.topic || `Consultation ${s.session_id.slice(0, 6)}`),
+            createdAt: s.created_at || new Date().toISOString(),
+            messages: [],
+          }))
+
+          setSessions((prev) => {
+            const merged = [...cloudSessions]
+            for (const p of prev) {
+              const idx = merged.findIndex((m) => m.id === p.id)
+              if (idx !== -1) {
+                merged[idx].messages = p.messages
+              }
+            }
+            return merged
+          })
+
+          const latestId = cloudSessions[0].id
+          setActiveSessionId((curr) => curr || latestId)
+
+          try {
+            const hist = await api.legal.history(latestId)
+            if (hist?.messages && hist.messages.length > 0) {
+              const mappedMsgs: Message[] = hist.messages.map((m) => ({
+                role: m.role,
+                content: m.content,
+                meta: m.meta as Message["meta"],
+              }))
+              setMessages(mappedMsgs)
+              setSessions((prev) =>
+                prev.map((s) => (s.id === latestId ? { ...s, messages: mappedMsgs } : s))
+              )
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+      .catch(() => {
+        /* fallback to local storage */
+      })
+  }, [])
+
+  // Select a session from history with cloud sync
+  const selectSession = async (session: ChatSession) => {
     setActiveSessionId(session.id)
-    setMessages(session.messages || [])
+    if (session.messages && session.messages.length > 0) {
+      setMessages(session.messages)
+    }
+    const token = typeof window !== "undefined" ? localStorage.getItem("legallens_token") : null
+    if (token) {
+      try {
+        const hist = await api.legal.history(session.id)
+        if (hist?.messages) {
+          const mapped: Message[] = hist.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            meta: m.meta as Message["meta"],
+          }))
+          setMessages(mapped)
+          setSessions((prev) =>
+            prev.map((s) => (s.id === session.id ? { ...s, messages: mapped } : s))
+          )
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   // Start a new blank chat session

@@ -25,6 +25,24 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(tempfile.gettempdir()) / "leg
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
+# Patterns matching complex malicious payloads, executable scripts, and exploits in text files
+_MALICIOUS_TEXT_PATTERNS = [
+    r"<\s*script[^>]*>",
+    r"javascript\s*:",
+    r"vbscript\s*:",
+    r"onload\s*=",
+    r"onerror\s*=",
+    r"<\s*iframe[^>]*>",
+    r"<\s*object[^>]*>",
+    r"<\s*embed[^>]*>",
+    r"<\?php",
+    r"<!entity",
+    r"<!doctype\s+[^>]*system",
+    r"^#!\s*/bin/",
+    r"^#!\s*/usr/bin/",
+]
+_MALICIOUS_TEXT_RE = re.compile("|".join(_MALICIOUS_TEXT_PATTERNS), re.IGNORECASE | re.MULTILINE)
+
 
 class StatusUpdate(BaseModel):
     document_id: str
@@ -78,9 +96,11 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_optional
         if content.startswith(b"MZ") or content.startswith(b"\x7fELF") or b"\x00" in content[:1024]:
             raise HTTPException(400, f"File contents do not match expected format for '{ext}' (binary or executable content detected).")
         try:
-            content[:4096].decode("utf-8")
+            text_sample = content[:32768].decode("utf-8")
         except UnicodeDecodeError:
             raise HTTPException(400, f"File contents cannot be decoded as valid UTF-8 text for '{ext}'.")
+        if _MALICIOUS_TEXT_RE.search(text_sample):
+            raise HTTPException(400, f"File upload rejected: potential script, executable code, or exploit payload detected in '{ext}'.")
 
     target.write_bytes(content)
     t_ingest = time.time()

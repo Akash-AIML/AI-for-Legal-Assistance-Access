@@ -206,14 +206,34 @@ tts_text = synthesize_speech
 
 _DIM = 2048
 
+# Semantic concept clusters mapping legal terminology to coordinate subspaces
+_LEGAL_SEMANTIC_CLUSTERS: list[tuple[set[str], tuple[str, ...], int]] = [
+    ({"termination", "terminate", "terminated", "terminating", "cancel", "cancellation", "rescind", "breach", "default", "severance", "exit", "notice"}, ("termin", "cancel", "rescind", "breach"), 0),
+    ({"payment", "pay", "paid", "paying", "fee", "fees", "compensation", "invoice", "price", "rate", "cost", "penalty", "liquidated", "interest", "billing", "amount"}, ("pay", "invoic", "fee", "cost", "bill"), 128),
+    ({"liability", "liable", "indemnity", "indemnify", "indemnification", "loss", "losses", "harmless", "cap", "limitation", "warranty", "warranties", "damages"}, ("liab", "indemn", "damag", "warrant"), 256),
+    ({"confidential", "confidentiality", "proprietary", "trade", "secret", "secrets", "patent", "copyright", "intellectual", "property", "ownership", "assignment", "license"}, ("confid", "propriet", "patent", "intellect"), 384),
+    ({"governing", "law", "jurisdiction", "court", "arbitration", "dispute", "resolution", "venue", "tribunal", "compliance", "regulatory", "gdpr", "statute", "obligation"}, ("govern", "jurisdict", "arbitrat", "disput"), 512),
+    ({"contractor", "client", "employee", "employer", "tenant", "landlord", "party", "parties", "vendor", "supplier", "worker", "freelancer", "consultant"}, ("contract", "employ", "tenant", "landlord", "vendor"), 640),
+]
+
 
 def _offline_embed(text: str) -> list[float]:
-    """Deterministic bag-of-word hashed embedding (demo-only, not semantic)."""
+    """Semantic concept-anchored embedding with subword n-grams (preserves cosine similarity offline)."""
     vec = [0.0] * _DIM
     toks = re.findall(r"[a-z0-9]+", text.lower())
     for tok in toks:
-        idx = int(hashlib.md5(tok.encode()).hexdigest(), 16) % _DIM
-        vec[idx] += 1.0
+        # 1. Project legal concept clusters into semantic subspaces
+        for cluster, roots, offset in _LEGAL_SEMANTIC_CLUSTERS:
+            if tok in cluster or any(tok.startswith(root) for root in roots):
+                for i in range(64):
+                    vec[offset + i] += 4.0
+        # 2. Subword character n-grams (3-grams, 4-grams) for morphological proximity
+        padded = f"^{tok}$"
+        for n in (3, 4):
+            for i in range(len(padded) - n + 1):
+                ngram = padded[i : i + n]
+                h = int(hashlib.sha256(ngram.encode()).hexdigest()[:8], 16)
+                vec[1024 + (h % 1024)] += 0.5
     norm = (sum(v * v for v in vec) ** 0.5) or 1.0
     return [v / norm for v in vec]
 
