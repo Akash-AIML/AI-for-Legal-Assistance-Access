@@ -24,6 +24,7 @@ _settings = get_settings()
 _meta_index: dict[str, dict] = {}
 _bm25_corpus: list[str] = []
 _bm25_ids: list[str] = []
+_bm25_tokenized: list[list[str]] = []
 _bm25: Optional[BM25Okapi] = None
 
 FEATURED_DEMO_DOC_IDS = {
@@ -43,7 +44,7 @@ def _get_collection():
 
 def rebuild_index() -> None:
     """Re-read all chunks (text + metadata) from vector store and rebuild BM25 + meta indexes."""
-    global _bm25, _bm25_corpus, _bm25_ids, _meta_index
+    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized
     try:
         col = _get_collection()
         data = col.get(include=["documents", "metadatas"])
@@ -51,29 +52,31 @@ def rebuild_index() -> None:
         _bm25_ids = data.get("ids", []) or []
         metas = data.get("metadatas", []) or []
         _meta_index = {cid: m for cid, m in zip(_bm25_ids, metas) if m}
-        tokenized = [t.split() for t in _bm25_corpus]
-        _bm25 = BM25Okapi(tokenized) if tokenized else None
+        _bm25_tokenized = [t.split() for t in _bm25_corpus]
+        _bm25 = BM25Okapi(_bm25_tokenized) if _bm25_tokenized else None
     except Exception as exc:
         logger.warning("rebuild_index encountered error: %s", exc)
 
 
 def append_to_bm25(new_chunks: list[Chunk]) -> None:
-    """Incrementally update BM25 corpus and metadata index with new chunks (avoiding full collection scans)."""
-    global _bm25, _bm25_corpus, _bm25_ids, _meta_index
+    """Incrementally update BM25 corpus and metadata index with new chunks in O(Delta N) time."""
+    global _bm25, _bm25_corpus, _bm25_ids, _meta_index, _bm25_tokenized
     if not new_chunks:
         return
-    if _bm25 is None:
+    if _bm25 is None or not _bm25_tokenized:
         rebuild_index()
         return
 
     from ingestion.store import _flat_meta
+    new_tokenized: list[list[str]] = []
     for c in new_chunks:
         _bm25_ids.append(c.chunk_id)
         _bm25_corpus.append(c.text)
         _meta_index[c.chunk_id] = _flat_meta(c)
+        new_tokenized.append(c.text.split())
 
-    tokenized = [t.split() for t in _bm25_corpus]
-    _bm25 = BM25Okapi(tokenized) if tokenized else None
+    _bm25_tokenized.extend(new_tokenized)
+    _bm25 = BM25Okapi(_bm25_tokenized) if _bm25_tokenized else None
 
 
 def _ensure_index() -> None:

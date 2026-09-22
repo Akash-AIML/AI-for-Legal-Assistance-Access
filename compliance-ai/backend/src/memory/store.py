@@ -99,6 +99,24 @@ def _init(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_xray_doc ON xray_cache(document_id);
 
+        CREATE TABLE IF NOT EXISTS compare_cache (
+            cache_key TEXT PRIMARY KEY,
+            doc_a TEXT,
+            doc_b TEXT,
+            data TEXT,
+            created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_compare_cache_key ON compare_cache(cache_key);
+
+        CREATE TABLE IF NOT EXISTS brief_cache (
+            cache_key TEXT PRIMARY KEY,
+            document_id TEXT,
+            language TEXT,
+            data TEXT,
+            created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_brief_doc ON brief_cache(document_id);
+
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             name TEXT,
@@ -282,6 +300,71 @@ def set_xray_cache(document_id: str, data: dict, language: str = "en") -> None:
         _db().execute(
             """
             INSERT INTO xray_cache (cache_key, document_id, language, data, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data, created_at=excluded.created_at
+            """,
+            (cache_key, document_id, language, json.dumps(data), now),
+        )
+        _db().commit()
+
+
+# --- compare_cache ---------------------------------------------------------
+
+def _compare_key(doc_a: str, doc_b: str) -> str:
+    first, second = sorted([doc_a, doc_b])
+    return f"{first}:{second}"
+
+
+def get_compare_cache(doc_a: str, doc_b: str) -> dict | None:
+    key = _compare_key(doc_a, doc_b)
+    with _lock:
+        cur = _db().execute("SELECT data FROM compare_cache WHERE cache_key = ?", (key,))
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except Exception:
+                return None
+    return None
+
+
+def set_compare_cache(doc_a: str, doc_b: str, data: dict) -> None:
+    key = _compare_key(doc_a, doc_b)
+    now = _now()
+    with _lock:
+        _db().execute(
+            """
+            INSERT INTO compare_cache (cache_key, doc_a, doc_b, data, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data, created_at=excluded.created_at
+            """,
+            (key, doc_a, doc_b, json.dumps(data), now),
+        )
+        _db().commit()
+
+
+# --- brief_cache -----------------------------------------------------------
+
+def get_brief_cache(document_id: str, language: str = "en") -> dict | None:
+    cache_key = f"{document_id}:{language}"
+    with _lock:
+        cur = _db().execute("SELECT data FROM brief_cache WHERE cache_key = ?", (cache_key,))
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except Exception:
+                return None
+    return None
+
+
+def set_brief_cache(document_id: str, data: dict, language: str = "en") -> None:
+    cache_key = f"{document_id}:{language}"
+    now = _now()
+    with _lock:
+        _db().execute(
+            """
+            INSERT INTO brief_cache (cache_key, document_id, language, data, created_at)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data, created_at=excluded.created_at
             """,

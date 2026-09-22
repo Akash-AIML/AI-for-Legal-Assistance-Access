@@ -26,4 +26,15 @@ describe("UploadView Component", () => {
     expect(screen.getByText("Contract Compare")).toBeInTheDocument()
     expect(screen.getByText("Lawyer Brief")).toBeInTheDocument()
   })
+
+  it("includes an accessible screen reader live status region", () => {
+    const onUploadComplete = vi.fn()
+    render(
+      <MemoryRouter>
+        <UploadView onUploadComplete={onUploadComplete} />
+      </MemoryRouter>
+    )
+    const statusRegion = screen.getByRole("status")
+    expect(statusRegion).toHaveAttribute("aria-live", "polite")
+  })
 })

@@ -162,6 +162,44 @@ class TestContractCompare:
         )
         assert resp.status_code == 404
 
+    def test_compare_empty_document_returns_400(self, client, sample_doc_id):
+        """Comparing with empty document ID must return 400."""
+        resp = client.post(
+            "/api/legal/compare",
+            json={"document_a": "", "document_b": sample_doc_id},
+        )
+        assert resp.status_code == 400
+
+
+    def test_compare_cache_hit(self, client, sample_doc_id, sample_doc_b_id):
+        """Comparing the same two documents twice must return from persistent SQLite cache."""
+        from unittest.mock import patch
+        # Prime the cache
+        resp1 = client.post(
+            "/api/legal/compare",
+            json={"document_a": sample_doc_id, "document_b": sample_doc_b_id},
+        )
+        assert resp1.status_code == 200
+
+        # Second call: verify compare_documents is NOT called
+        with patch("api.legal_routes.compare_documents") as mock_compare:
+            resp2 = client.post(
+                "/api/legal/compare",
+                json={"document_a": sample_doc_id, "document_b": sample_doc_b_id},
+            )
+            assert resp2.status_code == 200
+            assert resp2.json()["document_a_id"] == resp1.json()["document_a_id"]
+            mock_compare.assert_not_called()
+
+        # Symmetric check: doc_b and doc_a inverted should hit the same cache
+        with patch("api.legal_routes.compare_documents") as mock_compare_sym:
+            resp3 = client.post(
+                "/api/legal/compare",
+                json={"document_a": sample_doc_b_id, "document_b": sample_doc_id},
+            )
+            assert resp3.status_code == 200
+            mock_compare_sym.assert_not_called()
+
 
 class TestLawyerBrief:
     def test_generate_brief_for_valid_doc(self, client, sample_doc_id):
@@ -175,10 +213,37 @@ class TestLawyerBrief:
         assert "risk_areas" in data
         assert "recommended_questions" in data
 
+    def test_lawyer_brief_cache_hit(self, client, sample_doc_id):
+        """Generating a brief twice must return from persistent SQLite cache."""
+        from unittest.mock import patch
+        # Prime the cache
+        resp1 = client.post("/api/legal/lawyer-brief", json={"document_id": sample_doc_id, "language": "en"})
+        assert resp1.status_code == 200
+
+        # Second call: verify generate_lawyer_brief is NOT called
+        with patch("api.legal_routes.generate_lawyer_brief") as mock_gen:
+            resp2 = client.post("/api/legal/lawyer-brief", json={"document_id": sample_doc_id, "language": "en"})
+            assert resp2.status_code == 200
+            assert resp2.json()["situation"] == resp1.json()["situation"]
+            mock_gen.assert_not_called()
+
+    def test_generate_brief_hindi(self, client, sample_doc_id):
+        """Brief generation with language='hi' must succeed."""
+        resp = client.post("/api/legal/lawyer-brief", json={"document_id": sample_doc_id, "language": "hi"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["document_id"] == sample_doc_id
+        assert "situation" in data
+
     def test_generate_brief_nonexistent_returns_404(self, client):
         """Brief generation for unknown document must return 404."""
         resp = client.post("/api/legal/lawyer-brief", json={"document_id": "nonexistent_doc_404"})
         assert resp.status_code == 404
+
+    def test_generate_brief_empty_returns_400(self, client):
+        """Brief generation with empty document ID must return 400."""
+        resp = client.post("/api/legal/lawyer-brief", json={"document_id": ""})
+        assert resp.status_code == 400
 
 
 class TestObligations:

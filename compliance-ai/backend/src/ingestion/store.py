@@ -140,6 +140,57 @@ def count_raw() -> int:
         return 0
 
 
+def flat_to_doc_metadata(flat: dict):
+    """Convert flat metadata dictionary back into a typed DocMetadata model."""
+    from datetime import date
+    from models import DocMetadata, DocStatus
+    status_str = flat.get("status", "UNKNOWN")
+    try:
+        status_val = DocStatus(status_str)
+    except Exception:
+        status_val = DocStatus.UNKNOWN
+
+    m = DocMetadata(
+        document_id=flat.get("document_id", ""),
+        title=flat.get("title", ""),
+        document_type=flat.get("document_type", "CONTRACT"),
+        department=flat.get("department", "Legal"),
+        jurisdiction=flat.get("jurisdiction", "Global"),
+        version=flat.get("version", "1"),
+        status=status_val,
+        authority=flat.get("authority", "official"),
+        source_path=flat.get("source_path", ""),
+        access_roles=[r for r in (flat.get("access_roles", "") or "").split(",") if r],
+        tags=[t for t in (flat.get("tags", "") or "").split(",") if t],
+    )
+    if flat.get("owner"):
+        m.owner = flat["owner"]
+    if flat.get("governing_law"):
+        m.governing_law = flat["governing_law"]
+    if flat.get("country"):
+        m.country = flat["country"]
+    if flat.get("state"):
+        m.state = flat["state"]
+    if flat.get("citation"):
+        m.citation = flat["citation"]
+    if flat.get("effective_date"):
+        try:
+            m.effective_date = date.fromisoformat(flat["effective_date"])
+        except Exception:
+            pass
+    if flat.get("review_date"):
+        try:
+            m.review_date = date.fromisoformat(flat["review_date"])
+        except Exception:
+            pass
+    if flat.get("expiry_date"):
+        try:
+            m.expiry_date = date.fromisoformat(flat["expiry_date"])
+        except Exception:
+            pass
+    return m
+
+
 __all__ = [
     "get_collection",
     "upsert_chunks",
@@ -155,5 +206,6 @@ __all__ = [
     "get_meta",
     "get_chunks_for_doc",
     "list_documents",
+    "flat_to_doc_metadata",
     "FEATURED_DEMO_DOC_IDS",
 ]

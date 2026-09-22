@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +29,7 @@ class CompareRequest(BaseModel):
 
 class BriefRequest(BaseModel):
     document_id: str
+    language: str = "en"
 
 
 class ObligationsRequest(BaseModel):
@@ -35,7 +37,7 @@ class ObligationsRequest(BaseModel):
 
 
 # In-memory object cache for raw result models
-_xray_obj_cache: dict[str, any] = {}
+_xray_obj_cache: dict[str, Any] = {}
 
 
 def _chunks_for_doc(document_id: str, user: dict | None = None) -> list[RetrievedEvidence]:
@@ -52,7 +54,7 @@ def _chunks_for_doc(document_id: str, user: dict | None = None) -> list[Retrieve
                 doc_id=document_id,
                 section=meta.get("section", "Body"),
                 text=text,
-                metadata=store._flat_to_meta_external(meta) if hasattr(store, '_flat_to_meta_external') else _flat_to_meta(meta),
+                metadata=store.flat_to_doc_metadata(meta),
                 fusion_score=0.0,
             )
         )
@@ -69,43 +71,6 @@ def _chunks_for_doc(document_id: str, user: dict | None = None) -> list[Retrieve
     # Sort by section index for coherent analysis
     chunks.sort(key=lambda e: e.section)
     return chunks
-
-
-def _flat_to_meta(flat: dict) -> DocMetadata:
-    """Convert flat metadata dict to DocMetadata."""
-    m = DocMetadata(
-        document_id=flat.get("document_id", ""),
-        title=flat.get("title", ""),
-        document_type=flat.get("document_type", "CONTRACT"),
-        department=flat.get("department", "Legal"),
-        jurisdiction=flat.get("jurisdiction", "Global"),
-        version=flat.get("version", "1"),
-        status=DocStatus(flat.get("status", "UNKNOWN")),
-        authority=flat.get("authority", "official"),
-        source_path=flat.get("source_path", ""),
-        access_roles=[r for r in (flat.get("access_roles", "") or "").split(",") if r],
-        tags=[t for t in (flat.get("tags", "") or "").split(",") if t],
-    )
-    try:
-        if flat.get("effective_date"):
-            m.effective_date = date.fromisoformat(flat["effective_date"])
-        if flat.get("review_date"):
-            m.review_date = date.fromisoformat(flat["review_date"])
-        if flat.get("expiry_date"):
-            m.expiry_date = date.fromisoformat(flat["expiry_date"])
-    except (ValueError, TypeError):
-        pass
-    # Extended fields
-    m.governing_law = flat.get("governing_law", "")
-    m.country = flat.get("country", "")
-    m.state = flat.get("state", "")
-    m.citation = flat.get("citation", "")
-    authority_type = flat.get("authority_type", "USER_DOCUMENT")
-    try:
-        m.authority_type = AuthorityType(authority_type)
-    except ValueError:
-        pass
-    return m
 
 
 @router.post("/analyze", operation_id="analyze_document_xray", description="Run Document X-Ray analysis on an indexed document.")
@@ -177,6 +142,11 @@ async def compare(body: CompareRequest, user: dict = Depends(get_optional_user))
     if doc_a_id == doc_b_id:
         raise HTTPException(400, "Cannot compare a document with itself")
 
+    # Fast persistent SQLite cache lookup (sub-5ms response time)
+    cached_compare = memory_store.get_compare_cache(doc_a_id, doc_b_id)
+    if cached_compare:
+        return cached_compare
+
     chunks_a = _chunks_for_doc(doc_a_id, user=user)
     chunks_b = _chunks_for_doc(doc_b_id, user=user)
 
@@ -190,7 +160,7 @@ async def compare(body: CompareRequest, user: dict = Depends(get_optional_user))
 
     result = await anyio.to_thread.run_sync(compare_documents, doc_a_id, title_a, chunks_a, doc_b_id, title_b, chunks_b)
 
-    return {
+    resp_data = {
         "document_a_id": result.document_a_id,
         "document_b_id": result.document_b_id,
         "document_a_title": result.document_a_title,
@@ -208,6 +178,10 @@ async def compare(body: CompareRequest, user: dict = Depends(get_optional_user))
         "summary": result.summary,
     }
 
+    # Persist in SQLite compare cache
+    memory_store.set_compare_cache(doc_a_id, doc_b_id, resp_data)
+    return resp_data
+
 
 @router.post("/lawyer-brief", operation_id="generate_lawyer_brief", description="Generate a pre-consultation lawyer brief for a document.")
 async def lawyer_brief(body: BriefRequest, user: dict = Depends(get_optional_user)) -> dict:
@@ -215,6 +189,11 @@ async def lawyer_brief(body: BriefRequest, user: dict = Depends(get_optional_use
     document_id = body.document_id.strip()
     if not document_id:
         raise HTTPException(400, "document_id is required")
+
+    # Fast persistent SQLite cache lookup (sub-5ms response time)
+    cached_brief = memory_store.get_brief_cache(document_id, language=body.language)
+    if cached_brief:
+        return cached_brief
 
     chunks = _chunks_for_doc(document_id, user=user)
     if not chunks:
@@ -226,13 +205,13 @@ async def lawyer_brief(body: BriefRequest, user: dict = Depends(get_optional_use
     if document_id in _xray_obj_cache:
         xray = _xray_obj_cache[document_id]
     else:
-        xray = await anyio.to_thread.run_sync(analyze_document, document_id, title, chunks)
+        xray = await anyio.to_thread.run_sync(analyze_document, document_id, title, chunks, body.language)
         _xray_obj_cache[document_id] = xray
 
-    # Generate the lawyer brief
-    brief = await anyio.to_thread.run_sync(generate_lawyer_brief, document_id, title, xray)
+    # Generate the lawyer brief with requested language (e.g. English or Hindi)
+    brief = await anyio.to_thread.run_sync(generate_lawyer_brief, document_id, title, xray, body.language)
 
-    return {
+    resp_data = {
         "document_id": brief.document_id,
         "situation": brief.situation,
         "key_clauses": brief.key_clauses,
@@ -240,6 +219,10 @@ async def lawyer_brief(body: BriefRequest, user: dict = Depends(get_optional_use
         "recommended_questions": brief.recommended_questions,
         "information_to_gather": brief.information_to_gather,
     }
+
+    # Persist in SQLite brief cache
+    memory_store.set_brief_cache(document_id, resp_data, language=body.language)
+    return resp_data
 
 
 @router.post("/obligations", operation_id="extract_document_obligations", description="Extract obligations and deadlines from a document.")

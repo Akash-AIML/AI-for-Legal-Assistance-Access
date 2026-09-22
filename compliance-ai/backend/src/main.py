@@ -99,7 +99,11 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
             else:
                 content = "# 404 Not Found\n\nThe requested resource could not be found.\n\nIf you are an AI agent looking for documentation or capabilities, please refer to:\n- [llms.txt](/llms.txt) for agentic usage instructions.\n- [Sitemap](/sitemap.xml) for a full list of indexable pages.\n- [MCP](/.well-known/mcp) for our Model Context Protocol definitions."
                 return Response(content=content, status_code=404, media_type="text/markdown", headers={"Vary": "Accept"})
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY"},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,6 +132,11 @@ async def add_rest_headers(request: Request, call_next):
                 "error_type": type(exc).__name__,
                 "traceback": traceback.format_exc().splitlines(),
                 "path": request.url.path,
+            },
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": "DENY",
+                "Referrer-Policy": "strict-origin-when-cross-origin",
             },
         )
     # REST headers

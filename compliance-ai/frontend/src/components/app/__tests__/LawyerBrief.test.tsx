@@ -51,11 +51,13 @@ describe("LawyerBrief Component", () => {
     vi.clearAllMocks()
   })
 
-  it("renders header and document selector", () => {
+  it("renders header, language selector, and document selector", () => {
     render(<LawyerBrief documents={mockDocuments} />)
     expect(screen.getByRole("heading", { name: "Lawyer Brief", level: 1 })).toBeInTheDocument()
     expect(screen.getByLabelText(/select document to generate lawyer brief/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/select brief language/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /generate lawyer brief/i })).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite")
   })
 
   it("disables generate button when no document is selected", () => {

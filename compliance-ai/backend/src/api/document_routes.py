@@ -55,11 +55,13 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_optional
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Path traversal protection: strip directory components, sanitize filename, and add unique prefix to avoid overwrite collisions
-    raw_name = Path(file.filename or "upload").name
-    safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", raw_name) or "upload"
+    # Path traversal protection: strip directory components, sanitize filename, and verify path boundary
+    raw_name = os.path.basename(file.filename or "upload")
+    safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", raw_name).lstrip(".").replace("..", "_") or "upload"
     unique_prefix = uuid.uuid4().hex[:8]
-    target = UPLOAD_DIR / f"{unique_prefix}_{safe_name}"
+    target = (UPLOAD_DIR / f"{unique_prefix}_{safe_name}").resolve()
+    if not str(target).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(400, "Invalid file path: path traversal detected.")
 
     content = await file.read()
 

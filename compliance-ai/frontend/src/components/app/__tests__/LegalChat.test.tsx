@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, it, expect } from "vitest"
 import { LegalChat } from "../LegalChat"
 
@@ -21,5 +21,24 @@ describe("LegalChat Component", () => {
     const logRegion = screen.getByRole("log")
     expect(logRegion).toHaveAttribute("aria-live", "polite")
     expect(logRegion).toHaveAttribute("aria-label", "Chat conversation")
+  })
+
+  it("disables send button when input is empty and enables when text is entered", () => {
+    render(<LegalChat />)
+    const sendBtn = screen.getByRole("button", { name: /send message/i })
+    expect(sendBtn).toBeDisabled()
+
+    const textarea = screen.getByPlaceholderText(/ask a question about your uploaded documents/i) as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: "What is the liability cap?" } })
+    expect(textarea.value).toBe("What is the liability cap?")
+    expect(sendBtn).toBeEnabled()
+  })
+
+  it("renders suggestion buttons with accessible labels", () => {
+    render(<LegalChat />)
+    const suggestionBtn = screen.getByRole("button", {
+      name: /ask suggestion: what are the termination notice requirements/i,
+    })
+    expect(suggestionBtn).toBeInTheDocument()
   })
 })

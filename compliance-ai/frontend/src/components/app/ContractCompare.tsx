@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { ScrollReveal, StaggerContainer, StaggerItem } from "@/components/landing/animated"
+import { LEGAL_GLOSSARY, type GlossaryTerm } from "./legalGlossaryData"
 import { cn } from "@/lib/utils"
 
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
   CHANGED: { color: "text-red-500 bg-red-500/10 border-red-500/30", icon: <AlertTriangle className="h-4 w-4" /> },
   ADDED: { color: "text-blue-500 bg-blue-500/10 border-blue-500/30", icon: <Plus className="h-4 w-4" /> },
-  REMOVED: { color: "text-zinc-500 bg-zinc-500/10 border-zinc-500/30", icon: <Minus className="h-4 w-4" /> },
+  REMOVED: { color: "text-zinc-700 dark:text-zinc-200 bg-zinc-500/15 border-zinc-500/30 font-medium", icon: <Minus className="h-4 w-4" /> },
   SAME: { color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30", icon: <CheckCircle2 className="h-4 w-4" /> },
 }
 
@@ -72,6 +74,12 @@ export function ContractCompare({ documents }: ContractCompareProps) {
           </div>
         </div>
       </ScrollReveal>
+
+      {/* Screen Reader Live Status Region */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {loading && "Comparing documents, please wait..."}
+        {result && `Comparison complete. Found ${changedCount} changed clauses and ${sameCount} unchanged clauses.`}
+      </div>
 
       {/* Document Selectors */}
       <ScrollReveal delay={0.05}>
@@ -214,9 +222,42 @@ export function ContractCompare({ documents }: ContractCompareProps) {
                               <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", st.color)}>
                                 {st.icon}
                               </div>
-                              <span className="font-semibold text-foreground">
-                                {CLAUSE_LABELS[c.clause_type] || c.clause_type}
-                              </span>
+                              {(() => {
+                                const label = CLAUSE_LABELS[c.clause_type] || c.clause_type
+                                const glossaryMatch = LEGAL_GLOSSARY.find(
+                                  (g: GlossaryTerm) =>
+                                    g.term.toLowerCase().includes(label.toLowerCase()) ||
+                                    label.toLowerCase().includes(g.term.toLowerCase())
+                                )
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          tabIndex={0}
+                                          role="button"
+                                          aria-label={`Glossary definition for ${label}`}
+                                          className="font-semibold text-foreground cursor-help underline decoration-dotted underline-offset-4"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault()
+                                            }
+                                          }}
+                                        >
+                                          {label}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs text-xs space-y-1 p-3 glass-panel">
+                                        <p className="font-bold text-foreground">{glossaryMatch?.term || label}</p>
+                                        <p className="text-muted-foreground">{glossaryMatch?.plainEnglish || "Legal contract clause definition."}</p>
+                                        {glossaryMatch?.whyItMatters && (
+                                          <p className="text-primary font-medium">{glossaryMatch.whyItMatters}</p>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )
+                              })()}
                               <Badge variant={c.status === "CHANGED" ? "destructive" : c.status === "SAME" ? "default" : "secondary"}>
                                 {c.status}
                               </Badge>

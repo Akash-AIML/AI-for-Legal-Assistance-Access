@@ -16,6 +16,7 @@ interface LawyerBriefProps {
 
 export function LawyerBrief({ documents }: LawyerBriefProps) {
   const [selectedDoc, setSelectedDoc] = useState("")
+  const [language, setLanguage] = useState("en")
   const [result, setResult] = useState<LawyerBriefResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -26,7 +27,7 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
     setError("")
     setResult(null)
     try {
-      const res = await api.legal.brief(selectedDoc)
+      const res = await api.legal.brief(selectedDoc, language)
       setResult(res)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -34,7 +35,7 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
     } finally {
       setLoading(false)
     }
-  }, [selectedDoc])
+  }, [selectedDoc, language])
 
   return (
     <div className="space-y-6">
@@ -48,6 +49,12 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
         </div>
       </ScrollReveal>
 
+      {/* Screen Reader Live Status Region */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {loading && "Generating lawyer brief, please wait..."}
+        {result && "Lawyer brief generation complete."}
+      </div>
+
       {/* Document Selector */}
       <ScrollReveal delay={0.05}>
         <Card>
@@ -57,8 +64,8 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+              <div className="sm:col-span-7">
                 <label className="text-sm font-medium text-muted-foreground block mb-1.5" htmlFor="select-brief-doc">
                   Document for Brief
                 </label>
@@ -84,21 +91,37 @@ export function LawyerBrief({ documents }: LawyerBriefProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={generate} disabled={!selectedDoc || loading} aria-label="Generate Lawyer Brief" className="gap-2">
-                {loading ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <FileSearch className="h-4 w-4" aria-hidden="true" /> Generate Brief
-                  </>
-                )}
-              </Button>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-muted-foreground block mb-1.5" htmlFor="select-brief-lang">
+                  Language
+                </label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger id="select-brief-lang" aria-label="Select brief language" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="hi">हिन्दी (Hindi)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-3">
+                <Button onClick={generate} disabled={!selectedDoc || loading} aria-label="Generate Lawyer Brief" className="w-full gap-2">
+                  {loading ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <FileSearch className="h-4 w-4" aria-hidden="true" /> Generate Brief
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

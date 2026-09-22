@@ -139,20 +139,6 @@ def _extract_json(raw: str) -> dict:
         except Exception:
             pass
 
-    # 4. Fallback for truncated JSON: close unclosed brackets
-    if start_brace != -1:
-        sub = candidate[start_brace:]
-        open_curly = sub.count("{") - sub.count("}")
-        open_square = sub.count("[") - sub.count("]")
-        if open_curly > 0 or open_square > 0:
-            repair = sub + ("]" * max(0, open_square)) + ("}" * max(0, open_curly))
-            try:
-                res = json.loads(repair)
-                if isinstance(res, dict):
-                    return res
-            except Exception:
-                pass
-
     return {}
 
 
@@ -343,9 +329,10 @@ def generate_lawyer_brief(
     document_id: str,
     title: str,
     xray: DocumentXRayResult,
+    language: str = "en",
 ) -> LawyerBrief:
     if _settings.llm_offline:
-        return _offline_lawyer_brief(document_id, title, xray)
+        return _offline_lawyer_brief(document_id, title, xray, language=language)
 
     xray_data = {
         "document_id": xray.document_id,
@@ -355,16 +342,20 @@ def generate_lawyer_brief(
     }
 
     user_prompt = f"Doc Analysis:\n{json.dumps(xray_data)}"
+    system_prompt = _LAWYER_BRIEF_SYSTEM
+    if language.lower() in ("hi", "hindi"):
+        system_prompt += "\nIMPORTANT: The user has requested Hindi. You MUST write the 'situation', 'why_it_matters', 'risk_areas', and 'recommended_questions' in natural, professional Hindi (हिन्दी) for citizen legal consultation."
+
     raw = chat(
-        [{"role": "system", "content": _LAWYER_BRIEF_SYSTEM}, {"role": "user", "content": user_prompt}],
+        [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
         temperature=0.2,
-        max_tokens=350,
+        max_tokens=450,
         response_format={"type": "json_object"},
     )
 
     data = _extract_json(raw)
     if not data:
-        return _offline_lawyer_brief(document_id, title, xray)
+        return _offline_lawyer_brief(document_id, title, xray, language=language)
 
     return LawyerBrief(
         document_id=document_id,
@@ -422,12 +413,17 @@ def _offline_compare(doc_a_id: str, doc_a_title: str, doc_b_id: str, doc_b_title
     )
 
 
-def _offline_lawyer_brief(document_id: str, title: str, xray: DocumentXRayResult) -> LawyerBrief:
+def _offline_lawyer_brief(document_id: str, title: str, xray: DocumentXRayResult, language: str = "en") -> LawyerBrief:
+    is_hindi = language.lower() in ("hi", "hindi")
     return LawyerBrief(
         document_id=document_id,
-        situation=f"Pre-consultation brief for '{title}'.",
+        situation=f"'{title}' के लिए वकील से पूर्व-परामर्श सारांश।" if is_hindi else f"Pre-consultation brief for '{title}'.",
         key_clauses=[],
         risk_areas=[],
-        recommended_questions=["Which provisions carry the most financial risk?"],
-        information_to_gather=["Copy of contract addendums"],
+        recommended_questions=[
+            "किन शर्तों में सबसे अधिक वित्तीय जोखिम है?" if is_hindi else "Which provisions carry the most financial risk?"
+        ],
+        information_to_gather=[
+            "अनुबंध संशोधनों की प्रतिलिपि" if is_hindi else "Copy of contract addendums"
+        ],
     )

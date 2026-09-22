@@ -244,7 +244,18 @@ export function DocumentXRay({ documents }: DocumentXRayProps) {
                                       <TooltipProvider>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <span tabIndex={0} role="button" aria-label={`Glossary definition for ${label}`}>
+                                            <span
+                                              tabIndex={0}
+                                              role="button"
+                                              aria-label={`Glossary definition for ${label}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === " ") {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                }
+                                              }}
+                                            >
                                               <Badge
                                                 variant={f.severity === "HIGH" ? "destructive" : f.severity === "MEDIUM" ? "default" : "secondary"}
                                                 className="cursor-help"

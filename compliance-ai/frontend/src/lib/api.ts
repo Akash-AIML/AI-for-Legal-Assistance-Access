@@ -62,10 +62,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ document_a: docA, document_b: docB }),
       }),
-    brief: (documentId: string) =>
+    brief: (documentId: string, language = "en") =>
       request<LawyerBriefResult>("/legal/lawyer-brief", {
         method: "POST",
-        body: JSON.stringify({ document_id: documentId }),
+        body: JSON.stringify({ document_id: documentId, language }),
       }),
     obligations: (documentId: string) =>
       request<ObligationsResult>("/legal/obligations", {

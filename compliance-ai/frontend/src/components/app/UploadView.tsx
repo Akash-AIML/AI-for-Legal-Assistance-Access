@@ -71,12 +71,13 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
                 : item
             )
           )
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err)
           console.error(`⏱️ [FE-PERF] Upload failed for ${file.name}:`, err)
           setItems((prev) =>
             prev.map((item) =>
               item.filename === file.name
-                ? { ...item, status: "error", error: err.message || "Upload failed" }
+                ? { ...item, status: "error", error: msg || "Upload failed" }
                 : item
             )
           )
@@ -143,6 +144,11 @@ export function UploadView({ onUploadComplete }: UploadViewProps) {
           clauses, flags risk levels, extracts obligations, and compiles lawyer-ready briefs.
         </p>
       </ScrollReveal>
+
+      {/* Screen Reader Live Status Region */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {uploading && "Uploading and indexing documents, please wait..."}
+      </div>
 
       {/* Multi-File Upload Drop Zone */}
       <ScrollReveal delay={0.1}>
